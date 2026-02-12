@@ -15,7 +15,7 @@ export function Navbar() {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         {/* Logo */}
         <Link href="/" className="text-xl font-semibold">
-          ChordMonkey
+          🐒 ChordMonkey
         </Link>
         <NavigationMenu>
           <NavigationMenuList className="gap-6">
