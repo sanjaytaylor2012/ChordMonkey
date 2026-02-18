@@ -123,3 +123,22 @@
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes float {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(10px, -15px);
+  }
+  50% {
+    transform: translate(-5px, 10px);
+  }
+  75% {
+    transform: translate(-15px, -5px);
+  }
+}
+
+.animate-float {
+  animation: float linear infinite;
+}
