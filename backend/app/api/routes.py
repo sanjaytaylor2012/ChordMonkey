@@ -8,6 +8,7 @@ from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import FileResponse
 
 from ..controllers.midi_conversion import convert_upload_to_midi_path
+from ..controllers.chord_analysis import analyze_midi_chords
 
 
 router = APIRouter()
@@ -43,3 +44,18 @@ async def transcribe_to_midi(file: UploadFile = File(...)):
         filename="output.mid",
         background=BackgroundTask(lambda p: os.remove(p), str(out_path)),
     )
+
+@router.post("/analyze-midi")
+async def analyze_midi(file: UploadFile = File(...)):
+    suffix = os.path.splitext(file.filename or "")[1] or ".mid"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
+
+    try:
+        return analyze_midi_chords(tmp_path)
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass

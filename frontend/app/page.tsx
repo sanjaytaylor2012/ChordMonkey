@@ -6,6 +6,9 @@ import ChordDisplay from "@/components/ChordDisplay";
 import ChordRecommendations from "@/components/ChordRecommendations";
 import ChordProgression from "@/components/ChordProgression";
 
+const ANALYZE_URL = "http://localhost:8000/analyze-midi";
+
+
 export default function Home() {
   // Current detected chord from audio
   const [detectedChord, setDetectedChord] = useState<string | null>("Am");
@@ -43,13 +46,51 @@ export default function Home() {
   }
 
   // Called when MIDI conversion completes (for future use)
-  function handleMidiConverted(midiBlob: Blob) {
-    // TODO: Parse MIDI and detect chords
-    console.log("MIDI converted:", midiBlob);
+  async function handleMidiConverted(midiBlob: Blob) {
+    try {
+      const midiFile = new File([midiBlob], "output.mid", { type: "audio/midi" });
+      const form = new FormData();
+      form.append("file", midiFile);
+
+      const resp = await fetch(ANALYZE_URL, { method: "POST", body: form });
+      if (!resp.ok) throw new Error(await resp.text());
+
+      const analysis = await resp.json();
+      const first = analysis?.events?.[0];
+
+      if (!first) {
+          setDetectedChord("(no chord detected)");
+          return;
+      }
+
+      if (first.symbol) {
+      setDetectedChord(first.symbol);
+      return;
+      }
+
+      // Preferred: backend provides a simple symbol like "G" or "Am"
+      const symbol: string | undefined = first.symbol;
+
+      if (symbol) {
+        setDetectedChord(symbol);
+        return;
+      }
+
+      // Fallback (if you haven't added `symbol` yet):
+      // Guess from pitch_classes (major/minor only)
+      const pcs: string[] | undefined = first.pitch_classes;
+      if (pcs && pcs.length >= 2) {
+        // crude: if contains minor 3rd from root, label as minor (MVP)
+        // Better to add `symbol` in backend.
+        setDetectedChord(pcs[0]); // at least show the root pitch class
+      }
+    } catch (e) {
+      console.error("Analyze MIDI failed:", e);
+    }
   }
 
   // The chord to display 
-  const displayChord = selectedChord || detectedChord;
+  const displayChord = detectedChord;
 
   return (
     <div className="min-h-screen bg-background">

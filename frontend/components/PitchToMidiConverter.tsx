@@ -4,6 +4,7 @@ import React, { useRef, useState } from "react";
 
 export default function SimplePitchToMidiRecorder() {
   const BACKEND_URL = "http://localhost:8000/transcribe-to-midi";
+  const ANALYZE_URL = "http://localhost:8000/analyze-midi";
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -69,11 +70,42 @@ export default function SimplePitchToMidiRecorder() {
       a.click();
 
       URL.revokeObjectURL(midiUrl);
+
+      const { key, first } = await analyzeMidiAndGetFirstChord(midiBlob);
+
+      if (first) {
+          setFirstChord({
+              label: first.chord_name,
+              roman: first.roman,
+              key,
+              pitchClasses: first.pitch_classes,
+          });
+      }  else {
+          setFirstChord(null);
+      }
+
     } catch (e: any) {
       setErr(e?.message ?? "Convert failed");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function analyzeMidiAndGetFirstChord(midiBlob: Blob) {
+    const midiFile = new File([midiBlob], "output.mid", { type: "audio/midi" });
+    const form = new FormData();
+    form.append("file", midiFile);
+
+    const resp = await fetch(ANALYZE_URL, { method: "POST", body: form });
+    if (!resp.ok) throw new Error(await resp.text());
+
+    const analysis = await resp.json();
+    const first = analysis?.events?.[0] ?? null;
+
+    return {
+      key: analysis?.key ?? null,
+      first, // { chord_name, roman, pitch_classes, offset, duration }
+    };
   }
 
   return (
