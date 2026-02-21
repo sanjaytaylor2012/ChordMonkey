@@ -19,6 +19,11 @@ is stored in controllers. This breaks up concern between network infra and
 actaul meaningful code.
 """
 
+@router.get("/test")
+async def test():
+    return "hello world"
+
+
 @router.post("/transcribe-to-midi")
 async def transcribe_to_midi(file: UploadFile = File(...)):
     # Create an output path

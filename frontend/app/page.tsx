@@ -6,18 +6,23 @@ import ChordDisplay from "@/components/ChordDisplay";
 import ChordRecommendations from "@/components/ChordRecommendations";
 import ChordProgression from "@/components/ChordProgression";
 
-const ANALYZE_URL = "http://localhost:8000/analyze-midi";
-
+const ANALYZE_URL =
+  "https://5ywb7vjgv5.execute-api.us-east-1.amazonaws.com/prod/analyze-midi";
 
 export default function Home() {
   // Current detected chord from audio
   const [detectedChord, setDetectedChord] = useState<string | null>("Am");
-  
-  // Chord selected from recommendations 
+
+  // Chord selected from recommendations
   const [selectedChord, setSelectedChord] = useState<string | null>(null);
-  
+
   // The chord progression the user is building
-  const [progression, setProgression] = useState<string[]>(["C", "G", "Am", "F"]);
+  const [progression, setProgression] = useState<string[]>([
+    "C",
+    "G",
+    "Am",
+    "F",
+  ]);
 
   // Track the most recently added chord
   const [lastAddedChord, setLastAddedChord] = useState<string | null>(null);
@@ -25,7 +30,7 @@ export default function Home() {
   // Which chord in the progression is "active"
   const [currentIndex, setCurrentIndex] = useState<number | null>(2);
 
-  // Handle selecting a chord from recommendations 
+  // Handle selecting a chord from recommendations
   function handleSelectChord(chord: string) {
     setSelectedChord(chord);
   }
@@ -48,7 +53,9 @@ export default function Home() {
   // Called when MIDI conversion completes (for future use)
   async function handleMidiConverted(midiBlob: Blob) {
     try {
-      const midiFile = new File([midiBlob], "output.mid", { type: "audio/midi" });
+      const midiFile = new File([midiBlob], "output.mid", {
+        type: "audio/midi",
+      });
       const form = new FormData();
       form.append("file", midiFile);
 
@@ -59,13 +66,13 @@ export default function Home() {
       const first = analysis?.events?.[0];
 
       if (!first) {
-          setDetectedChord("(no chord detected)");
-          return;
+        setDetectedChord("(no chord detected)");
+        return;
       }
 
       if (first.symbol) {
-      setDetectedChord(first.symbol);
-      return;
+        setDetectedChord(first.symbol);
+        return;
       }
 
       // Preferred: backend provides a simple symbol like "G" or "Am"
@@ -89,7 +96,7 @@ export default function Home() {
     }
   }
 
-  // The chord to display 
+  // The chord to display
   const displayChord = detectedChord;
 
   return (

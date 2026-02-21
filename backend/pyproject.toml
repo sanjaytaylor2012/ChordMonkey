@@ -5,7 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "awslambdaric>=4.0.0",
     "basic-pitch>=0.4.0",
     "fastapi>=0.128.0",
+    "mangum>=0.21.0",
+    "music21>=9.9.1",
+    "python-multipart>=0.0.22",
+    "setuptools<80",
     "uvicorn>=0.40.0",
 ]

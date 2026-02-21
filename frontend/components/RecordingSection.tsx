@@ -6,8 +6,11 @@ interface RecordingSectionProps {
   onMidiConverted?: (midiBlob: Blob) => void;
 }
 
-export default function RecordingSection({ onMidiConverted }: RecordingSectionProps) {
-  const BACKEND_URL = "http://localhost:8000/transcribe-to-midi";
+export default function RecordingSection({
+  onMidiConverted,
+}: RecordingSectionProps) {
+  const BACKEND_URL =
+    "https://5ywb7vjgv5.execute-api.us-east-1.amazonaws.com/prod/transcribe-to-midi";
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -71,7 +74,7 @@ export default function RecordingSection({ onMidiConverted }: RecordingSectionPr
       if (!resp.ok) throw new Error(await resp.text());
 
       const midiBlob = await resp.blob();
-      
+
       if (onMidiConverted) {
         onMidiConverted(midiBlob);
       }
@@ -101,12 +104,16 @@ export default function RecordingSection({ onMidiConverted }: RecordingSectionPr
           {isRecording ? (
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-              <span className="text-sm text-muted-foreground">Recording...</span>
+              <span className="text-sm text-muted-foreground">
+                Recording...
+              </span>
             </div>
           ) : audioUrl ? (
             <audio controls src={audioUrl} className="h-10" />
           ) : (
-            <span className="text-sm text-muted-foreground">Audio Waveform Display</span>
+            <span className="text-sm text-muted-foreground">
+              Audio Waveform Display
+            </span>
           )}
         </div>
 
@@ -149,9 +156,7 @@ export default function RecordingSection({ onMidiConverted }: RecordingSectionPr
 
         {/* Error Message */}
         {error && (
-          <div className="mt-4 text-center text-sm text-red-500">
-            {error}
-          </div>
+          <div className="mt-4 text-center text-sm text-red-500">{error}</div>
         )}
       </div>
     </div>
