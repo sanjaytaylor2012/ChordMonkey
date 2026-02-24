@@ -22,6 +22,11 @@ WORKDIR /app
 ENV UV_PIP_ONLY_BINARY=:all:
 ENV PIP_ONLY_BINARY=:all:
 
+# this dep needs to write to a tmp file
+# will mess w lambda dirs if not set
+ENV NUMBA_CACHE_DIR=/tmp/numba_cache
+ENV NUMBA_CACHE_PATH=/tmp/numba_cache
+
 # Python deps
 # install from lockfile
 COPY pyproject.toml uv.lock ./
@@ -45,7 +50,7 @@ CMD ["app.handler.handler"]
 # docker tag chordmonkey-backend:latest 909487697336.dkr.ecr.us-east-1.amazonaws.com/chordmonkey-backend:latest
 # docker push 909487697336.dkr.ecr.us-east-1.amazonaws.com/chordmonkey-backend:latest
 
-# to update lamdba function
+# to update lambda function
 # aws lambda update-function-code --function-name backend --image-uri 909487697336.dkr.ecr.us-east-1.amazonaws.com/chordmonkey-backend:latest
 
 

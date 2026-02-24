@@ -10,7 +10,9 @@ export default function RecordingSection({
   onMidiConverted,
 }: RecordingSectionProps) {
   const BACKEND_URL =
-    "https://5ywb7vjgv5.execute-api.us-east-1.amazonaws.com/prod/transcribe-to-midi";
+    "https://5ywb7vjgv5.execute-api.us-east-1.amazonaws.com/transcribe-to-midi";
+
+  // const BACKEND_URL = "http://localhost:8000/transcribe-to-midi";
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
