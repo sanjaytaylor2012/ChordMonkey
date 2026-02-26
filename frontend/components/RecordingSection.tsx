@@ -100,7 +100,7 @@ export default function RecordingSection({ onMidiConverted }: RecordingSectionPr
         <div className="bg-muted h-16 rounded-lg mb-5 flex items-center justify-center">
           {isRecording ? (
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+              <span className="w-3 h-3 bg-red-500 rounded-full animate-recording" />
               <span className="text-sm text-muted-foreground">Recording...</span>
             </div>
           ) : audioUrl ? (
