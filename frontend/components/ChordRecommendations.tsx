@@ -1,62 +1,25 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 
-interface ChordRecommendation {
+interface ApiRec {
   chord: string;
   reason: string;
+  roman: string;
+  function: string;
 }
 
-const RECOMMENDATIONS: Record<string, ChordRecommendation[]> = {
-  "C": [
-    { chord: "G", reason: "Common progression (C → G)" },
-    { chord: "Am", reason: "Relative minor" },
-    { chord: "F", reason: "IV chord in C major" },
-    { chord: "Dm", reason: "ii chord in C major" },
-  ],
-  "G": [
-    { chord: "C", reason: "Common progression (G → C)" },
-    { chord: "D", reason: "V chord in G major" },
-    { chord: "Em", reason: "Relative minor" },
-    { chord: "Am", reason: "ii chord in G major" },
-  ],
-  "Am": [
-    { chord: "G", reason: "Common progression (Am → G)" },
-    { chord: "F", reason: "Relative major chord" },
-    { chord: "Dm", reason: "iv chord in A minor" },
-    { chord: "E", reason: "Dominant (V) chord" },
-  ],
-  "F": [
-    { chord: "C", reason: "Common progression (F → C)" },
-    { chord: "G", reason: "V chord resolution" },
-    { chord: "Am", reason: "iii chord in F major" },
-    { chord: "Dm", reason: "Relative minor" },
-  ],
-  "Dm": [
-    { chord: "Am", reason: "Common progression (Dm → Am)" },
-    { chord: "G", reason: "IV chord resolution" },
-    { chord: "C", reason: "VII chord in D minor" },
-    { chord: "F", reason: "Relative major" },
-  ],
-  "Em": [
-    { chord: "Am", reason: "Common progression (Em → Am)" },
-    { chord: "D", reason: "VII chord in E minor" },
-    { chord: "G", reason: "Relative major" },
-    { chord: "C", reason: "VI chord in E minor" },
-  ],
-};
-
-const DEFAULT_RECOMMENDATIONS: ChordRecommendation[] = [
-  { chord: "C", reason: "Popular starting chord" },
-  { chord: "G", reason: "Popular starting chord" },
-  { chord: "Am", reason: "Popular minor chord" },
-  { chord: "F", reason: "Common in pop progressions" },
-];
+interface ApiResp {
+  key_guess: string;
+  confidence: number;
+  recommendations: ApiRec[];
+}
 
 interface ChordRecommendationsProps {
   currentChord: string | null;
   selectedChord: string | null;
   lastAddedChord: string | null;
+  progression: string[];
   onSelectChord: (chord: string) => void;
   onAddChord: (chord: string) => void;
 }
@@ -65,12 +28,36 @@ export default function ChordRecommendations({
   currentChord,
   selectedChord,
   lastAddedChord,
+  progression,
   onSelectChord,
   onAddChord,
 }: ChordRecommendationsProps) {
-  const recommendations = currentChord
-    ? RECOMMENDATIONS[currentChord] || DEFAULT_RECOMMENDATIONS
-    : DEFAULT_RECOMMENDATIONS;
+  const [data, setData] = useState<ApiResp | null>(null);
+
+  useEffect(() => {
+    async function run() {
+      try {
+        const resp = await fetch("http://localhost:8000/recommendations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            progression,
+            current_chord: currentChord,
+            max_recs: 6,
+          }),
+        });
+        if (!resp.ok) return;
+        setData(await resp.json());
+      } catch {
+        // ignore for now
+      }
+    }
+
+    // Only fetch when we have something meaningful
+    if ((progression?.length ?? 0) > 0 || currentChord) run();
+  }, [progression, currentChord]);
+
+  const recommendations = data?.recommendations ?? [];
 
   return (
     <div className="flex flex-col">

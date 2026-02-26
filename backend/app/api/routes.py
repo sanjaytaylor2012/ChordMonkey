@@ -6,9 +6,12 @@ from pathlib import Path
 from starlette.background import BackgroundTask
 from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
+from typing import List
 
 from ..controllers.midi_conversion import convert_upload_to_midi_path
 from ..controllers.chord_analysis import analyze_midi_chords
+from ..controllers.chord_recommendation  import recommend_next_chords
 
 
 router = APIRouter()
@@ -59,3 +62,17 @@ async def analyze_midi(file: UploadFile = File(...)):
             os.remove(tmp_path)
         except OSError:
             pass
+
+
+class RecommendRequest(BaseModel):
+    progression: List[str]
+    current_chord: str | None = None
+    max_recs: int = 6
+
+@router.post("/recommendations")
+async def recommendations(req: RecommendRequest):
+    return recommend_next_chords(
+        progression=req.progression,
+        current_chord=req.current_chord,
+        max_recs=req.max_recs,
+    )

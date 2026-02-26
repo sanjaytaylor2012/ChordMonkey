@@ -110,6 +110,7 @@ export default function Home() {
             currentChord={detectedChord}
             selectedChord={selectedChord}
             lastAddedChord={lastAddedChord}
+            progression={progression}
             onSelectChord={handleSelectChord}
             onAddChord={handleAddChord}
           />
