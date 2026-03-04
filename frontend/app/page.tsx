@@ -9,7 +9,7 @@ import ChordProgression from "@/components/ChordProgression";
 import ParticlesBackground from "@/components/ParticlesBackground";
 
 const ANALYZE_URL =
-  "https://5ywb7vjgv5.execute-api.us-east-1.amazonaws.com/prod/analyze-midi";
+  "https://5ywb7vjgv5.execute-api.us-east-1.amazonaws.com/analyze-midi";
 
 export default function Home() {
   // Current detected chord from audio
