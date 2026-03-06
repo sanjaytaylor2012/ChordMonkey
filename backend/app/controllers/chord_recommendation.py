@@ -134,16 +134,17 @@ def recommend_next_chords(
         recommendations: [{chord, reason, roman, function}, ...]
       }
     """
-    # Use current chord if provided, else last chord in progression
+    # Primary context comes from the full progression built in the UI.
+    # Fall back to the currently detected chord only when progression is empty.
     working = [p for p in progression if p]
-    if current_chord:
-        working = working + [current_chord]
+    if not working and current_chord:
+        working = [current_chord]
 
     key_guess, confidence = infer_key_from_progression(working)
     tonic, mode = key_guess.split()
     k = m21key.Key(tonic, mode)
 
-    last_sym = current_chord or (working[-1] if working else None)
+    last_sym = working[-1] if working else None
     last_cs = _safe_chordsymbol(last_sym) if last_sym else None
 
     # Default: diatonic pop-friendly set (I, V, vi, IV, ii, iii)

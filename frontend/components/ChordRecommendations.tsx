@@ -42,7 +42,7 @@ export default function ChordRecommendations({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             progression,
-            current_chord: currentChord,
+            current_chord: progression.length === 0 ? currentChord : null,
             max_recs: 6,
           }),
         });
