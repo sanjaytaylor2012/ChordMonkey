@@ -37,7 +37,7 @@ export default function Welcome() {
                   href="/login"
                   className="w-full sm:w-auto px-8 py-4 rounded-lg bg-background border border-border text-foreground font-semibold hover:bg-muted transition-all"
                 >
-                  Sign in
+                  Login
                 </Link>
               </div>
             </div>
