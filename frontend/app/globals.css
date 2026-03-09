@@ -121,6 +121,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 }
 
@@ -141,4 +142,27 @@
 
 .animate-float {
   animation: float linear infinite;
+}
+
+/* Smooth theme transitions */
+.bg-card,
+.bg-background,
+.bg-muted,
+.border-border {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+@keyframes recording-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.7;
+  }
+}
+
+.animate-recording {
+  animation: recording-pulse 1s ease-in-out infinite;
 }
