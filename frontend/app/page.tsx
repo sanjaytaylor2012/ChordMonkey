@@ -32,7 +32,7 @@ export default function Home() {
 
   // Handle adding a chord to the progression
   function handleAddChord(chord: string) {
-    setProgression([...progression, chord]);
+    setProgression((prev) => [...prev, chord]);
     setLastAddedChord(chord);
     setSelectedChord(chord);
   }
@@ -105,6 +105,7 @@ export default function Home() {
           <ChordDisplay
             chord={displayChord}
             label={selectedChord ? "Selected Chord" : "Detected Chord"}
+            onAddChord={handleAddChord}
           />
           <ChordRecommendations
             currentChord={detectedChord}

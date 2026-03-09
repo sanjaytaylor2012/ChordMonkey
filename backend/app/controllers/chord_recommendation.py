@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
-from music21 import harmony, key as m21key, roman, pitch, chord
+from music21 import harmony, key as m21key, roman, chord
 
 
 # -----------------------------
@@ -59,6 +58,43 @@ def _function_from_roman(figure: str) -> str:
     return "Other"
 
 
+def _parse_forced_key(key_text: Optional[str]) -> Optional[m21key.Key]:
+    """
+    Parse manual key choices like:
+      - "C major"
+      - "A minor"
+      - "C" (major implied)
+      - "Am" (minor implied)
+    """
+    if not key_text:
+        return None
+
+    text = key_text.strip()
+    if not text:
+        return None
+
+    parts = text.split()
+    if len(parts) == 2 and parts[1].lower() in {"major", "minor"}:
+        tonic = parts[0].replace("b", "-")
+        mode = parts[1].lower()
+        try:
+            return m21key.Key(tonic, mode)
+        except Exception:
+            return None
+
+    tonic = text
+    mode = "major"
+    if text.lower().endswith("m") and len(text) > 1:
+        tonic = text[:-1]
+        mode = "minor"
+
+    tonic = tonic.replace("b", "-")
+    try:
+        return m21key.Key(tonic, mode)
+    except Exception:
+        return None
+
+
 # -----------------------------
 # Key inference
 # -----------------------------
@@ -70,50 +106,142 @@ _CANDIDATE_KEYS: List[m21key.Key] = [
 ]
 
 
-def infer_key_from_progression(symbols: List[str]) -> Tuple[str, float]:
+def _quality_bucket(cs: harmony.ChordSymbol) -> str:
+    kind = (cs.chordKind or "").lower()
+    if "diminished" in kind:
+        return "dim"
+    if "minor" in kind:
+        return "min"
+    if "augmented" in kind:
+        return "aug"
+    # Treat dominant/suspended/other non-minor types as major-ish for MVP.
+    return "maj"
+
+
+def _key_scale_pcs(k: m21key.Key) -> set[int]:
+    tonic = k.tonic.pitchClass
+    if k.mode == "major":
+        offsets = [0, 2, 4, 5, 7, 9, 11]
+    else:
+        # Natural minor baseline.
+        offsets = [0, 2, 3, 5, 7, 8, 10]
+    return {(tonic + o) % 12 for o in offsets}
+
+
+def _allowed_diatonic_triads(k: m21key.Key) -> set[tuple[int, str]]:
+    tonic = k.tonic.pitchClass
+    triads: set[tuple[int, str]] = set()
+
+    if k.mode == "major":
+        # I ii iii IV V vi vii°
+        triads.update(
+            {
+                ((tonic + 0) % 12, "maj"),
+                ((tonic + 2) % 12, "min"),
+                ((tonic + 4) % 12, "min"),
+                ((tonic + 5) % 12, "maj"),
+                ((tonic + 7) % 12, "maj"),
+                ((tonic + 9) % 12, "min"),
+                ((tonic + 11) % 12, "dim"),
+            }
+        )
+    else:
+        # Natural minor: i ii° III iv v VI VII
+        triads.update(
+            {
+                ((tonic + 0) % 12, "min"),
+                ((tonic + 2) % 12, "dim"),
+                ((tonic + 3) % 12, "maj"),
+                ((tonic + 5) % 12, "min"),
+                ((tonic + 7) % 12, "min"),
+                ((tonic + 8) % 12, "maj"),
+                ((tonic + 10) % 12, "maj"),
+            }
+        )
+        # Harmonic-minor common borrow for functional harmony: V and vii°
+        triads.update(
+            {
+                ((tonic + 7) % 12, "maj"),
+                ((tonic + 11) % 12, "dim"),
+            }
+        )
+
+    return triads
+
+
+def _infer_key_scores(symbols: List[str]) -> List[Tuple[m21key.Key, float]]:
     """
-    Scores all 24 keys using:
-      - whether romanNumeralFromChord can interpret chord in that key
-      - diatonic preference (music21's roman object can tell us a lot)
-      - small cadence bonus if last chord is I/i
-    Returns (key_string, confidence 0..1).
+    Scores all 24 keys against the full progression.
+    Primary criterion is diatonic triad fit of each chord across the whole
+    progression, not just the latest chord.
     """
     chords = [cs for s in symbols if (cs := _safe_chordsymbol(s))]
 
     if not chords:
-        return ("C major", 0.0)
+        return [(m21key.Key("C", "major"), 0.0)]
+
+    parsed: List[tuple[Optional[int], str, set[int]]] = []
+    for cs in chords:
+        try:
+            r = cs.root()
+            root_pc = r.pitchClass if r is not None else None
+        except Exception:
+            root_pc = None
+        parsed.append((root_pc, _quality_bucket(cs), {p.pitchClass for p in cs.pitches}))
 
     scores: List[Tuple[m21key.Key, float]] = []
     for k in _CANDIDATE_KEYS:
         score = 0.0
-        for cs in chords:
-            try:
-                rn = roman.romanNumeralFromChord(cs, k)
-                score += 2.0
-                # Prefer fewer accidentals: rn.figure has accidentals; crude but effective
-                acc = rn.figure.count("#") + rn.figure.count("-")
-                score += max(0.0, 2.0 - 0.75 * acc)
-            except Exception:
-                score -= 1.25
+        scale_pcs = _key_scale_pcs(k)
+        allowed_triads = _allowed_diatonic_triads(k)
+        tonic_pc = k.tonic.pitchClass
+        dominant_pc = (tonic_pc + 7) % 12
 
-        # small cadence bonus
-        try:
-            last_rn = roman.romanNumeralFromChord(chords[-1], k).figure
-            if last_rn.startswith("I") or last_rn.startswith("i"):
+        # All chords contribute. Exact diatonic triad fit is strongest signal.
+        for root_pc, quality, pcs in parsed:
+            if root_pc is not None and (root_pc, quality) in allowed_triads:
+                score += 8.0
+            elif root_pc is not None and root_pc in scale_pcs:
+                # Root in scale, but quality mismatch.
                 score += 1.5
-        except Exception:
-            pass
+            else:
+                score -= 6.0
+
+            # Extra penalty for out-of-scale chord tones.
+            if pcs:
+                in_scale = len(pcs.intersection(scale_pcs))
+                out_of_scale = len(pcs) - in_scale
+                score += in_scale * 0.5
+                score -= out_of_scale * 2.5
+
+        # Small positional anchors.
+        roots = [r for r, _, _ in parsed]
+        if roots:
+            first_root = roots[0]
+            last_root = roots[-1]
+            if first_root == tonic_pc:
+                score += 2.0
+            if last_root == tonic_pc:
+                score += 3.0
+            if last_root == dominant_pc:
+                score += 1.0
+            if len(roots) >= 2 and roots[-2] == dominant_pc and last_root == tonic_pc:
+                score += 2.0
 
         scores.append((k, score))
 
     scores.sort(key=lambda x: x[1], reverse=True)
+    return scores
+
+
+def infer_key_from_progression(symbols: List[str]) -> Tuple[str, float]:
+    scores = _infer_key_scores(symbols)
     best_key, best = scores[0]
     second = scores[1][1] if len(scores) > 1 else (best - 1.0)
 
-    # Convert to a simple confidence (sigmoid-like on margin)
+    # Confidence from margin between top two candidate keys.
     margin = best - second
-    conf = max(0.0, min(1.0, 0.5 + 0.15 * margin))
-
+    conf = max(0.0, min(1.0, 0.5 + 0.03 * margin))
     return (f"{best_key.tonic.name} {best_key.mode}", conf)
 
 
@@ -125,6 +253,8 @@ def recommend_next_chords(
     progression: List[str],
     current_chord: Optional[str] = None,
     max_recs: int = 6,
+    forced_key: Optional[str] = None,
+    previous_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Returns:
@@ -140,9 +270,43 @@ def recommend_next_chords(
     if not working and current_chord:
         working = [current_chord]
 
-    key_guess, confidence = infer_key_from_progression(working)
-    tonic, mode = key_guess.split()
-    k = m21key.Key(tonic, mode)
+    debug_key_scores: List[Dict[str, Any]] = []
+
+    forced = _parse_forced_key(forced_key)
+    if forced:
+        k = forced
+        key_guess = f"{k.tonic.name} {k.mode}"
+        confidence = 1.0
+        debug_key_scores = [{"key": key_guess, "score": None, "selected": True}]
+    else:
+        scores = _infer_key_scores(working)
+        debug_key_scores = [
+            {"key": f"{cand.tonic.name} {cand.mode}", "score": round(score, 3)}
+            for cand, score in scores[:8]
+        ]
+        best_key, best_score = scores[0]
+        key_guess = f"{best_key.tonic.name} {best_key.mode}"
+        second_score = scores[1][1] if len(scores) > 1 else (best_score - 1.0)
+        confidence = max(0.0, min(1.0, 0.5 + 0.03 * (best_score - second_score)))
+
+        # Stability guard: in auto mode, avoid switching keys unless the new
+        # best key clearly beats the previously chosen key.
+        previous = _parse_forced_key(previous_key)
+        if previous:
+            prev_name = f"{previous.tonic.name} {previous.mode}"
+            score_by_name = {f"{cand.tonic.name} {cand.mode}": s for cand, s in scores}
+            prev_score = score_by_name.get(prev_name)
+            if prev_score is not None:
+                switch_margin = 8.0
+                if (best_score - prev_score) < switch_margin:
+                    key_guess = prev_name
+                    confidence = max(confidence, 0.55)
+        for item in debug_key_scores:
+            if item["key"] == key_guess:
+                item["selected"] = True
+
+        tonic, mode = key_guess.split()
+        k = m21key.Key(tonic, mode)
 
     last_sym = working[-1] if working else None
     last_cs = _safe_chordsymbol(last_sym) if last_sym else None
@@ -202,7 +366,10 @@ def recommend_next_chords(
             break
 
     return {
+        "engine_version": "keyfit-v3-debug",
         "key_guess": key_guess,
         "confidence": confidence,
         "recommendations": uniq,
+        "debug_progression_used": working,
+        "debug_key_scores": debug_key_scores,
     }

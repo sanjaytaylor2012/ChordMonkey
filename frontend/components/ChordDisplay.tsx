@@ -22,9 +22,14 @@ const CHORD_NAMES: Record<string, string> = {
 interface ChordDisplayProps {
   chord: string | null;
   label?: string;
+  onAddChord?: (chord: string) => void;
 }
 
-export default function ChordDisplay({ chord, label = "Detected Chord" }: ChordDisplayProps) {
+export default function ChordDisplay({
+  chord,
+  label = "Detected Chord",
+  onAddChord,
+}: ChordDisplayProps) {
   return (
     <div className="flex flex-col h-full">
       <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">
@@ -33,6 +38,16 @@ export default function ChordDisplay({ chord, label = "Detected Chord" }: ChordD
       <div className="bg-card border border-border rounded-xl p-6 text-center flex-1 flex flex-col justify-center">
         {chord ? (
           <>
+            <div className="flex justify-end mb-2">
+              <button
+                onClick={() => onAddChord?.(chord)}
+                className="w-8 h-8 rounded-md bg-primary text-primary-foreground text-lg font-bold hover:bg-primary/90 transition-colors"
+                aria-label={`Add ${chord} to progression`}
+                title="Add to progression"
+              >
+                +
+              </button>
+            </div>
             <div className="text-5xl font-bold text-foreground mb-2">
               {chord}
             </div>

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import logging
 from pathlib import Path
 from starlette.background import BackgroundTask
 from fastapi import APIRouter, UploadFile, File
@@ -15,6 +16,7 @@ from ..controllers.chord_recommendation  import recommend_next_chords
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 """
 All API and networking logic lives in routes.py. All actual business logic
@@ -68,11 +70,30 @@ class RecommendRequest(BaseModel):
     progression: List[str]
     current_chord: str | None = None
     max_recs: int = 6
+    forced_key: str | None = None
+    previous_key: str | None = None
 
 @router.post("/recommendations")
 async def recommendations(req: RecommendRequest):
-    return recommend_next_chords(
+    logger.info(
+        "recommendations request progression=%s current_chord=%s forced_key=%s previous_key=%s",
+        req.progression,
+        req.current_chord,
+        req.forced_key,
+        req.previous_key,
+    )
+    result = recommend_next_chords(
         progression=req.progression,
         current_chord=req.current_chord,
         max_recs=req.max_recs,
+        forced_key=req.forced_key,
+        previous_key=req.previous_key,
     )
+    logger.info(
+        "recommendations response key_guess=%s confidence=%s rec_count=%s top_scores=%s",
+        result.get("key_guess"),
+        result.get("confidence"),
+        len(result.get("recommendations", [])),
+        result.get("debug_key_scores", [])[:3],
+    )
+    return result
