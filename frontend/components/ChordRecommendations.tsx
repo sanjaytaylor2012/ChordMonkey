@@ -25,10 +25,30 @@ interface ChordRecommendationsProps {
 }
 
 const KEY_OPTIONS = [
-  "C major", "C# major", "D major", "Eb major", "E major", "F major",
-  "F# major", "G major", "Ab major", "A major", "Bb major", "B major",
-  "C minor", "C# minor", "D minor", "Eb minor", "E minor", "F minor",
-  "F# minor", "G minor", "Ab minor", "A minor", "Bb minor", "B minor",
+  "C major",
+  "C# major",
+  "D major",
+  "Eb major",
+  "E major",
+  "F major",
+  "F# major",
+  "G major",
+  "Ab major",
+  "A major",
+  "Bb major",
+  "B major",
+  "C minor",
+  "C# minor",
+  "D minor",
+  "Eb minor",
+  "E minor",
+  "F minor",
+  "F# minor",
+  "G minor",
+  "Ab minor",
+  "A minor",
+  "Bb minor",
+  "B minor",
 ];
 
 const AUTO_KEY = "__auto__";
@@ -51,8 +71,34 @@ const NOTE_TO_PC: Record<string, number> = {
   Bb: 10,
   B: 11,
 };
-const SHARP_NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-const FLAT_NOTES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const SHARP_NOTES = [
+  "C",
+  "C#",
+  "D",
+  "D#",
+  "E",
+  "F",
+  "F#",
+  "G",
+  "G#",
+  "A",
+  "A#",
+  "B",
+];
+const FLAT_NOTES = [
+  "C",
+  "Db",
+  "D",
+  "Eb",
+  "E",
+  "F",
+  "Gb",
+  "G",
+  "Ab",
+  "A",
+  "Bb",
+  "B",
+];
 
 function keyToScale(keyText: string): string[] | null {
   const [tonic, mode] = keyText.split(" ");
@@ -64,20 +110,33 @@ function keyToScale(keyText: string): string[] | null {
   if (!major && !minor) return null;
 
   const intervals = major ? [0, 2, 4, 5, 7, 9, 11] : [0, 2, 3, 5, 7, 8, 10];
-  const useFlats = tonic.includes("b") || ["F", "Bb", "Eb", "Ab", "Db", "Gb"].includes(tonic);
+  const useFlats =
+    tonic.includes("b") || ["F", "Bb", "Eb", "Ab", "Db", "Gb"].includes(tonic);
   const noteNames = useFlats ? FLAT_NOTES : SHARP_NOTES;
 
   return intervals.map((i) => noteNames[(tonicPc + i) % 12]);
 }
 
-function romanToChordSymbol(romanFigure: string, keyText: string): string | null {
+function romanToChordSymbol(
+  romanFigure: string,
+  keyText: string,
+): string | null {
   const scale = keyToScale(keyText);
   if (!scale) return null;
 
   const degreeMap: Record<string, number> = {
-    i: 0, ii: 1, iii: 2, iv: 3, v: 4, vi: 5, vii: 6,
+    i: 0,
+    ii: 1,
+    iii: 2,
+    iv: 3,
+    v: 4,
+    vi: 5,
+    vii: 6,
   };
-  const core = romanFigure.replace("°", "").replace("o", "").replace(/[0-9]/g, "");
+  const core = romanFigure
+    .replace("°", "")
+    .replace("o", "")
+    .replace(/[0-9]/g, "");
   const degree = degreeMap[core.toLowerCase()];
   if (degree === undefined) return null;
 
@@ -113,15 +172,19 @@ export default function ChordRecommendations({
           current_chord: progression.length === 0 ? currentChord : null,
           max_recs: 6,
           forced_key: forcedKey,
-          previous_key: selectedKey === AUTO_KEY ? previousAutoKeyRef.current : null,
+          previous_key:
+            selectedKey === AUTO_KEY ? previousAutoKeyRef.current : null,
         };
         console.log("[ChordRecommendations] request payload", payload);
-        const resp = await fetch("http://localhost:8000/recommendations", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify(payload),
-        });
+        const resp = await fetch(
+          "https://5ywb7vjgv5.execute-api.us-east-1.amazonaws.com/recommendations",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
+            body: JSON.stringify(payload),
+          },
+        );
         if (!resp.ok) return;
         const apiData: ApiResp = await resp.json();
         console.log("[ChordRecommendations] response payload", apiData);
@@ -163,7 +226,8 @@ export default function ChordRecommendations({
         <div className="mb-4 p-3 rounded-lg border border-border bg-background">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <span className="text-sm text-muted-foreground">
-              Active Key: <span className="text-foreground font-semibold">{activeKey}</span>
+              Active Key:{" "}
+              <span className="text-foreground font-semibold">{activeKey}</span>
             </span>
             <div className="flex items-center gap-2">
               <select
