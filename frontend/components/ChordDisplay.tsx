@@ -2,6 +2,7 @@
 
 import React from "react";
 import GuitarDiagram from "./GuitarDiagram";
+import url from "@/lib/utils";
 
 const CHORD_NAMES: Record<string, string> = {
   "C": "C Major",

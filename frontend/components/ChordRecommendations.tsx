@@ -1,6 +1,10 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import {url} from "@/lib/utils";
+
+
+const RECOMMENDATIONS_URL = `${url}/recommendations`
 
 interface ApiRec {
   chord: string;
@@ -177,7 +181,7 @@ export default function ChordRecommendations({
         };
         console.log("[ChordRecommendations] request payload", payload);
         const resp = await fetch(
-          "https://5ywb7vjgv5.execute-api.us-east-1.amazonaws.com/recommendations",
+            RECOMMENDATIONS_URL,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },

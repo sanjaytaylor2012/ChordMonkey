@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef, useState } from "react";
+import {url} from "@/lib/utils";
 
 interface RecordingSectionProps {
   onMidiConverted?: (midiBlob: Blob) => void;
@@ -9,8 +10,9 @@ interface RecordingSectionProps {
 export default function RecordingSection({
   onMidiConverted,
 }: RecordingSectionProps) {
-  const BACKEND_URL =
-    "https://5ywb7vjgv5.execute-api.us-east-1.amazonaws.com/transcribe-to-midi";
+
+  const TRANSCRIBE_URL =
+    `${url}/transcribe-to-midi`;
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -70,7 +72,7 @@ export default function RecordingSection({
       const form = new FormData();
       form.append("file", file);
 
-      const resp = await fetch(BACKEND_URL, { method: "POST", body: form });
+      const resp = await fetch(TRANSCRIBE_URL, { method: "POST", body: form });
       if (!resp.ok) throw new Error(await resp.text());
 
       const midiBlob = await resp.blob();
