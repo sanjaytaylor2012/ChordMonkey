@@ -58,6 +58,32 @@ def _function_from_roman(figure: str) -> str:
     return "Other"
 
 
+def _default_roman_pool(k: m21key.Key) -> List[str]:
+    if k.mode == "minor":
+        # Use actual minor-key harmony, not the parallel major defaults.
+        return ["i", "V", "VI", "iv", "VII", "III"]
+    return ["I", "V", "vi", "IV", "ii", "iii"]
+
+
+def _transition_roman_pool(k: m21key.Key, func: str) -> List[str]:
+    if k.mode == "minor":
+        if func == "Tonic":
+            return ["iv", "VI", "VII", "V"]
+        if func == "Predominant":
+            return ["V", "vii°", "i"]
+        if func == "Dominant":
+            return ["i", "VI", "III"]
+        return _default_roman_pool(k)
+
+    if func == "Tonic":
+        return ["IV", "ii", "V", "vi"]
+    if func == "Predominant":
+        return ["V", "vii°", "I"]
+    if func == "Dominant":
+        return ["I", "vi"]
+    return _default_roman_pool(k)
+
+
 def _parse_forced_key(key_text: Optional[str]) -> Optional[m21key.Key]:
     """
     Parse manual key choices like:
@@ -311,15 +337,16 @@ def recommend_next_chords(
     last_sym = working[-1] if working else None
     last_cs = _safe_chordsymbol(last_sym) if last_sym else None
 
-    # Default: diatonic pop-friendly set (I, V, vi, IV, ii, iii)
-    roman_pool = ["I", "V", "vi", "IV", "ii", "iii"]
+    roman_pool = _default_roman_pool(k)
 
     # If we can classify the last chord, bias transitions by function
     if last_cs:
         try:
             last_rn = roman.romanNumeralFromChord(last_cs, k).figure
             func = _function_from_roman(last_rn)
-            if func == "Tonic":
+            if k.mode == "minor":
+                roman_pool = _transition_roman_pool(k, func)
+            elif func == "Tonic":
                 roman_pool = ["IV", "ii", "V", "vi"]
             elif func == "Predominant":
                 roman_pool = ["V", "vii°", "I"]
