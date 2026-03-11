@@ -44,6 +44,18 @@ export default function Home() {
     setSelectedChord(chord);
   }
 
+  function handleRemoveChord(indexToRemove: number) {
+    setProgression((prev) => prev.filter((_, index) => index !== indexToRemove));
+    setSelectedChord(null);
+    setLastAddedChord(null);
+    setCurrentIndex((prev) => {
+      if (prev === null) return null;
+      if (prev === indexToRemove) return null;
+      if (prev > indexToRemove) return prev - 1;
+      return prev;
+    });
+  }
+
   // Clear the progression
   function handleClear() {
     setProgression([]);
@@ -132,6 +144,8 @@ export default function Home() {
               chords={progression}
               currentIndex={currentIndex}
               onClear={handleClear}
+              onAddChord={handleAddChord}
+              onRemoveChord={handleRemoveChord}
             />
           </div>
         </div>

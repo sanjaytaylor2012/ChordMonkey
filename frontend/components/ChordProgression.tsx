@@ -1,12 +1,21 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 interface ChordProgressionProps {
   chords: string[];
   currentIndex: number | null;
   onClear: () => void;
+  onAddChord: (chord: string) => void;
+  onRemoveChord: (index: number) => void;
 }
+
+const CHORD_ROOTS = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+const CHORD_QUALITIES = [
+  { label: "Major", suffix: "" },
+  { label: "Minor", suffix: "m" },
+  { label: "Dim", suffix: "dim" },
+];
 
 function PencilIcon({ className }: { className?: string }) {
   return (
@@ -25,9 +34,37 @@ export default function ChordProgression({
   chords,
   currentIndex,
   onClear,
+  onAddChord,
+  onRemoveChord,
 }: ChordProgressionProps) {
   const [songTitle, setSongTitle] = useState("Untitled Song");
   const [isEditing, setIsEditing] = useState(false);
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
+  const addMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isAddMenuOpen) return;
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!addMenuRef.current?.contains(event.target as Node)) {
+        setIsAddMenuOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsAddMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isAddMenuOpen]);
 
   function handleTitleClick() {
     setIsEditing(true);
@@ -54,6 +91,11 @@ export default function ChordProgression({
     if (e.key === "Escape") {
       setIsEditing(false);
     }
+  }
+
+  function handleAddChordClick(chord: string) {
+    onAddChord(chord);
+    setIsAddMenuOpen(false);
   }
 
   return (
@@ -97,39 +139,84 @@ export default function ChordProgression({
         </div>
 
         <div className="flex gap-3 flex-wrap">
-          {chords.length > 0 ? (
-            <>
-              {chords.map((chord, index) => (
-                <div
-                  key={index}
-                  className={`min-w-[70px] px-5 py-4 rounded-lg border-2 text-center transition-colors ${
-                    index === currentIndex
-                      ? "border-primary bg-primary/10"
-                      : index === chords.length - 1
-                      ? "border-green-600 bg-green-600/10"
-                      : "border-border bg-background"
-                  }`}
-                >
-                  <div className="text-xl font-bold text-foreground">
-                    {chord}
+          {chords.map((chord, index) => (
+            <div
+              key={index}
+              className={`relative min-w-[70px] min-h-[86px] px-5 py-4 rounded-lg border-2 text-center transition-colors ${
+                index === currentIndex
+                  ? "border-primary bg-primary/10"
+                  : index === chords.length - 1
+                  ? "border-green-600 bg-green-600/10"
+                  : "border-border bg-background"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => onRemoveChord(index)}
+                className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-sm bg-red-600 text-xs font-bold leading-none text-white transition-colors hover:bg-red-700"
+                aria-label={`Remove ${chord} from progression`}
+                title="Remove chord"
+              >
+                -
+              </button>
+              <div className="text-xl font-bold text-foreground">
+                {chord}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {index + 1}
+              </div>
+            </div>
+          ))}
+
+          <div className="relative" ref={addMenuRef}>
+            <button
+              type="button"
+              onClick={() => setIsAddMenuOpen((prev) => !prev)}
+              className="min-w-[70px] min-h-[86px] px-5 py-4 rounded-lg border-2 border-dashed border-border flex items-center justify-center text-2xl text-muted-foreground cursor-pointer hover:border-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Add chord to progression"
+              aria-expanded={isAddMenuOpen}
+            >
+              +
+            </button>
+
+            {isAddMenuOpen && (
+              <div className="absolute bottom-full left-0 z-20 mb-2 w-[320px] rounded-xl border border-border bg-card p-4 shadow-xl md:bottom-0 md:left-full md:mb-0 md:ml-2">
+                <div className="mb-3">
+                  <div className="text-sm font-semibold text-foreground">
+                    Add chord
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {index + 1}
+                  <div className="text-xs text-muted-foreground">
+                    Choose a root note and chord quality.
                   </div>
                 </div>
-              ))}
-            </>
-          ) : (
-            <div className="text-muted-foreground py-4">
-              No chords added yet. Record audio or select from suggestions.
-            </div>
-          )}
+                <div className="space-y-3">
+                  {CHORD_QUALITIES.map((quality) => (
+                    <div key={quality.label}>
+                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {quality.label}
+                      </div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {CHORD_ROOTS.map((root) => {
+                          const chord = `${root}${quality.suffix}`;
 
-          {chords.length > 0 && (
-            <div className="min-w-[70px] px-5 py-4 rounded-lg border-2 border-dashed border-border flex items-center justify-center text-2xl text-muted-foreground cursor-pointer hover:border-muted-foreground transition-colors">
-              +
-            </div>
-          )}
+                          return (
+                            <button
+                              key={chord}
+                              type="button"
+                              onClick={() => handleAddChordClick(chord)}
+                              className="rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                            >
+                              {chord}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
