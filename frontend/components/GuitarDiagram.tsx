@@ -49,7 +49,11 @@ interface GuitarDiagramProps {
 }
 
 export default function GuitarDiagram({ chord }: GuitarDiagramProps) {
-  const fingering = CHORD_FINGERINGS[chord] || [0, 0, 0, 0, 0, 0];
+  const normalizedChord = chord.replace("b", "-");
+  const fingering =
+    CHORD_FINGERINGS[chord] ||
+    CHORD_FINGERINGS[normalizedChord] ||
+    [0, 0, 0, 0, 0, 0];
   const frets = [1, 2, 3, 4];
 
   return (

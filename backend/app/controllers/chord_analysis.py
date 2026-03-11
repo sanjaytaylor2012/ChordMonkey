@@ -1,16 +1,83 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List
-from music21 import converter, chord, roman, pitch
+from music21 import converter, chord, roman, pitch, key as m21key
 
 MIN_DURATION = 0.25  # quarterLength; filters micro-events
+
+
+def _display_note_name(name: str) -> str:
+    return name.replace("-", "b")
+
+
+def _normalize_pitch_name_for_key(name: str, detected_key: m21key.Key) -> str:
+    if detected_key.sharps < 0:
+        return {
+            "C#": "D-",
+            "D#": "E-",
+            "F#": "G-",
+            "G#": "A-",
+            "A#": "B-",
+        }.get(name, name)
+
+    if detected_key.sharps > 0:
+        return {
+            "D-": "C#",
+            "E-": "D#",
+            "G-": "F#",
+            "A-": "G#",
+            "B-": "A#",
+        }.get(name, name)
+
+    return name
+
+
+def _quality_suffix(c: chord.Chord, roman_figure: str | None = None) -> str:
+    root = c.root()
+    if root is not None:
+        intervals = {(p.pitchClass - root.pitchClass) % 12 for p in c.pitches}
+
+        if {0, 3, 7}.issubset(intervals):
+            return "m"
+        if {0, 4, 7}.issubset(intervals):
+            return ""
+        if {0, 3, 6}.issubset(intervals):
+            return "dim"
+        if {0, 4, 8}.issubset(intervals):
+            return "aug"
+
+    chord_name = (c.commonName or "").lower()
+    if "minor" in chord_name:
+        return "m"
+    if "diminished" in chord_name:
+        return "dim"
+    if "augmented" in chord_name:
+        return "aug"
+
+    if roman_figure:
+        core = roman_figure.replace("°", "o").split("/")[0]
+        if "o" in core or "vii" in core.lower():
+            return "dim"
+        if any(ch.islower() for ch in core if ch.isalpha()):
+            return "m"
+
+    qual = c.quality
+    if qual == "minor":
+        return "m"
+    if qual == "major":
+        return ""
+    if qual == "diminished":
+        return "dim"
+    if qual == "augmented":
+        return "aug"
+    return ""
 
 
 def analyze_midi_chords(midi_path: str) -> Dict[str, Any]:
     score = converter.parse(midi_path)
 
     detected_key = score.analyze("key")
-    key_str = f"{detected_key.tonic.name} {detected_key.mode}"
+    key_str = f"{_display_note_name(detected_key.tonic.name)} {detected_key.mode}"
 
     chordified = score.chordify()
 
@@ -23,19 +90,24 @@ def analyze_midi_chords(midi_path: str) -> Dict[str, Any]:
         if float(elem.quarterLength) < MIN_DURATION:
             continue
 
-        pitch_classes = sorted(set(p.name for p in elem.pitches))
+        pitch_classes = sorted(
+            {
+                _normalize_pitch_name_for_key(p.name, detected_key)
+                for p in elem.pitches
+            }
+        )
         if len(pitch_classes) < 2:
             continue
 
         normalized = chord.Chord(pitch_classes)
-
-        symbol = chord_symbol_from_normalized_chord(normalized)
 
         rn = None
         try:
             rn = roman.romanNumeralFromChord(normalized, detected_key).figure
         except Exception:
             rn = None
+
+        symbol = chord_symbol_from_normalized_chord(normalized, rn)
 
         raw.append(
             {
@@ -64,17 +136,10 @@ def analyze_midi_chords(midi_path: str) -> Dict[str, Any]:
 
     return {"key": key_str, "events": merged}
 
-def chord_symbol_from_normalized_chord(c: chord.Chord) -> str:
-    root = c.root().name  # e.g., "G", "C#", "Bb"
-    qual = c.quality      # "major", "minor", "diminished", "augmented", etc.
-
-    if qual == "minor":
-        return f"{root}m"
-    if qual == "major":
-        return root
-    if qual == "diminished":
-        return f"{root}dim"
-    if qual == "augmented":
-        return f"{root}aug"
-    # fallback:
-    return root
+def chord_symbol_from_normalized_chord(
+    c: chord.Chord,
+    roman_figure: str | None = None,
+) -> str:
+    root = _display_note_name(c.root().name)
+    suffix = _quality_suffix(c, roman_figure)
+    return f"{root}{suffix}"

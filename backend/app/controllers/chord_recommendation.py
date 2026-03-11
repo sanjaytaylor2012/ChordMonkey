@@ -9,6 +9,9 @@ from music21 import harmony, key as m21key, roman, chord
 # Helpers: parsing + formatting
 # -----------------------------
 
+def _display_note_name(name: str) -> str:
+    return name.replace("-", "b")
+
 def _safe_chordsymbol(sym: str) -> Optional[harmony.ChordSymbol]:
     """
     Parse symbols like: C, Am, F#, Bb, G7, Dm7, Bdim, etc.
@@ -30,7 +33,7 @@ def _safe_chordsymbol(sym: str) -> Optional[harmony.ChordSymbol]:
 
 def _symbol_from_chord_obj(c: chord.Chord) -> str:
     """Simple triad-ish symbol. (Matches your chord_analysis style.)"""
-    root = c.root().name
+    root = _display_note_name(c.root().name)
     qual = c.quality
     if qual == "minor":
         return f"{root}m"
