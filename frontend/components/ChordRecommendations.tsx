@@ -174,7 +174,7 @@ export default function ChordRecommendations({
         const payload = {
           progression,
           current_chord: progression.length === 0 ? currentChord : null,
-          max_recs: 6,
+          max_recs: 4,
           forced_key: forcedKey,
           previous_key:
             selectedKey === AUTO_KEY ? previousAutoKeyRef.current : null,

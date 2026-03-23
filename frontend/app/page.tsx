@@ -5,11 +5,19 @@ import { Navbar } from "@/components/Navbar";
 import RecordingSection from "@/components/RecordingSection";
 import ChordDisplay from "@/components/ChordDisplay";
 import ChordRecommendations from "@/components/ChordRecommendations";
-import ChordProgression from "@/components/ChordProgression";
+import ChordProgression, { SongSection } from "@/components/ChordProgression";
 import ParticlesBackground from "@/components/ParticlesBackground";
 import {url} from "@/lib/utils";
 
 const ANALYZE_URL = `${url}/analyze-midi`
+
+function createSection(sectionNumber: number, chords: string[] = []): SongSection {
+  return {
+    id: `section-${sectionNumber}`,
+    title: `Section ${sectionNumber}`,
+    chords,
+  };
+}
 
 export default function Home() {
   // Current detected chord from audio
@@ -19,18 +27,18 @@ export default function Home() {
   const [selectedChord, setSelectedChord] = useState<string | null>(null);
 
   // The chord progression the user is building
-  const [progression, setProgression] = useState<string[]>([
-    "C",
-    "G",
-    "Am",
-    "F",
+  const [sections, setSections] = useState<SongSection[]>([
+    createSection(1, ["C", "G", "Am", "F"]),
   ]);
 
   // Track the most recently added chord
   const [lastAddedChord, setLastAddedChord] = useState<string | null>(null);
 
   // Which chord in the progression is "active"
-  const [currentIndex, setCurrentIndex] = useState<number | null>(2);
+  const [currentSectionIndex, setCurrentSectionIndex] = useState<number | null>(0);
+  const [currentChordIndex, setCurrentChordIndex] = useState<number | null>(2);
+
+  const progression = sections.flatMap((section) => section.chords);
 
   // Handle selecting a chord from recommendations
   function handleSelectChord(chord: string) {
@@ -39,29 +47,78 @@ export default function Home() {
 
   // Handle adding a chord to the progression
   function handleAddChord(chord: string) {
-    setProgression((prev) => [...prev, chord]);
+    const targetSectionIndex = sections.length - 1;
+    const nextChordIndex = sections[targetSectionIndex]?.chords.length ?? 0;
+
+    setSections((prev) =>
+      prev.map((section, index) =>
+        index === targetSectionIndex
+          ? { ...section, chords: [...section.chords, chord] }
+          : section
+      )
+    );
     setLastAddedChord(chord);
     setSelectedChord(chord);
+    setCurrentSectionIndex(targetSectionIndex);
+    setCurrentChordIndex(nextChordIndex);
   }
 
-  function handleRemoveChord(indexToRemove: number) {
-    setProgression((prev) => prev.filter((_, index) => index !== indexToRemove));
+  function handleAddChordToSection(sectionIndex: number, chord: string) {
+    const nextChordIndex = sections[sectionIndex]?.chords.length ?? 0;
+
+    setSections((prev) =>
+      prev.map((section, index) =>
+        index === sectionIndex
+          ? { ...section, chords: [...section.chords, chord] }
+          : section
+      )
+    );
+    setLastAddedChord(chord);
+    setSelectedChord(chord);
+    setCurrentSectionIndex(sectionIndex);
+    setCurrentChordIndex(nextChordIndex);
+  }
+
+  function handleRemoveChord(sectionIndex: number, chordIndexToRemove: number) {
+    setSections((prev) =>
+      prev.map((section, index) =>
+        index === sectionIndex
+          ? {
+              ...section,
+              chords: section.chords.filter((_, chordIndex) => chordIndex !== chordIndexToRemove),
+            }
+          : section
+      )
+    );
     setSelectedChord(null);
     setLastAddedChord(null);
-    setCurrentIndex((prev) => {
-      if (prev === null) return null;
-      if (prev === indexToRemove) return null;
-      if (prev > indexToRemove) return prev - 1;
+    setCurrentChordIndex((prev) => {
+      if (currentSectionIndex !== sectionIndex || prev === null) return prev;
+      if (prev === chordIndexToRemove) return null;
+      if (prev > chordIndexToRemove) return prev - 1;
       return prev;
     });
   }
 
   // Clear the progression
   function handleClear() {
-    setProgression([]);
-    setCurrentIndex(null);
+    setSections((prev) => prev.map((section) => ({ ...section, chords: [] })));
+    setCurrentSectionIndex(null);
+    setCurrentChordIndex(null);
     setSelectedChord(null);
     setLastAddedChord(null);
+  }
+
+  function handleAddSection() {
+    setSections((prev) => [...prev, createSection(prev.length + 1)]);
+  }
+
+  function handleRenameSection(sectionIndex: number, title: string) {
+    setSections((prev) =>
+      prev.map((section, index) =>
+        index === sectionIndex ? { ...section, title } : section
+      )
+    );
   }
 
   // Called when MIDI conversion completes
@@ -141,11 +198,14 @@ export default function Home() {
           {/* Chord Progression */}
           <div>
             <ChordProgression
-              chords={progression}
-              currentIndex={currentIndex}
+              sections={sections}
+              currentSectionIndex={currentSectionIndex}
+              currentChordIndex={currentChordIndex}
               onClear={handleClear}
-              onAddChord={handleAddChord}
+              onAddChord={handleAddChordToSection}
               onRemoveChord={handleRemoveChord}
+              onAddSection={handleAddSection}
+              onRenameSection={handleRenameSection}
             />
           </div>
         </div>

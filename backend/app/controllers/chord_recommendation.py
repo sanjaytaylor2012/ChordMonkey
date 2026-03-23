@@ -1,20 +1,18 @@
 from __future__ import annotations
 
+import random
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from music21 import harmony, key as m21key, roman, chord
+from music21 import chord, harmony, key as m21key, roman
 
-
-# -----------------------------
-# Helpers: parsing + formatting
-# -----------------------------
 
 def _display_note_name(name: str) -> str:
     return name.replace("-", "b")
 
 
 _ROOT_NOTE_RE = re.compile(r"^([A-Ga-g])([#b-]?)(.*)$")
+_TARGET_RECOMMENDATIONS = 4
 
 
 def _normalize_symbol_for_music21(sym: str) -> str:
@@ -54,11 +52,11 @@ def _safe_chordsymbol(sym: str) -> Optional[harmony.ChordSymbol]:
     sym = (sym or "").strip()
     if not sym:
         return None
+
     sym = _normalize_symbol_for_music21(sym)
     try:
         return harmony.ChordSymbol(sym)
     except Exception:
-        # Try a couple small normalizations
         sym2 = sym.replace("maj", "").replace("min", "m")
         try:
             return harmony.ChordSymbol(sym2)
@@ -67,7 +65,6 @@ def _safe_chordsymbol(sym: str) -> Optional[harmony.ChordSymbol]:
 
 
 def _symbol_from_chord_obj(c: chord.Chord) -> str:
-    """Simple triad-ish symbol. (Matches your chord_analysis style.)"""
     root = _display_note_name(c.root().name)
     qual = c.quality
     if qual == "minor":
@@ -82,11 +79,7 @@ def _symbol_from_chord_obj(c: chord.Chord) -> str:
 
 
 def _function_from_roman(figure: str) -> str:
-    """
-    Rough functional harmony buckets (MVP).
-    """
     f = figure.replace("o", "°")
-    # Normalize slash/secondary a bit: "V/V" -> treat as dominant
     if "V/" in f or f.startswith("V") or f.startswith("vii"):
         return "Dominant"
     if f.startswith("ii") or f.startswith("IV") or f.startswith("iv"):
@@ -96,40 +89,112 @@ def _function_from_roman(figure: str) -> str:
     return "Other"
 
 
-def _default_roman_pool(k: m21key.Key) -> List[str]:
+def _weighted_shuffle(items: List[tuple[str, str, float]]) -> List[tuple[str, str, float]]:
+    return sorted(
+        items,
+        key=lambda item: random.random() ** (1.0 / max(item[2], 0.001)),
+        reverse=True,
+    )
+
+
+def _default_recommendation_pool(k: m21key.Key) -> List[tuple[str, str, float]]:
     if k.mode == "minor":
-        # Use actual minor-key harmony, not the parallel major defaults.
-        return ["i", "V", "VI", "iv", "VII", "III"]
-    return ["I", "V", "vi", "IV", "ii", "iii"]
+        return [
+            ("i", "Re-centers the progression on the tonic", 1.1),
+            ("III", "Brightens the color without leaving the key", 0.7),
+            ("iv", "Moves gently into predominant motion", 1.0),
+            ("V", "Creates a strong pull back to the tonic", 1.1),
+            ("VI", "Adds a fuller minor-key lift", 0.9),
+            ("VII", "Keeps the line moving forward", 0.75),
+            ("vii°", "Introduces sharper dominant tension", 0.45),
+            ("V/III", "Adds borrowed dominant color", 0.35),
+            ("V/V", "Leans into a brighter dominant setup", 0.3),
+        ]
+
+    return [
+        ("I", "Reaffirms the home key", 1.0),
+        ("ii", "Smoothly opens up the harmony", 0.95),
+        ("iii", "Keeps motion inside the key with a lighter color", 0.55),
+        ("IV", "Opens the progression with a stable lift", 1.0),
+        ("V", "Builds tension that wants to resolve", 1.1),
+        ("vi", "Extends the tonic feel with a softer turn", 0.9),
+        ("vii°", "Adds leading-tone tension", 0.45),
+        ("V/ii", "Adds a touch of secondary dominant color", 0.3),
+        ("V/vi", "Hints at a brief tonicization of vi", 0.35),
+        ("V/V", "Pushes forward toward the dominant", 0.4),
+    ]
 
 
-def _transition_roman_pool(k: m21key.Key, func: str) -> List[str]:
+def _transition_recommendation_pool(
+    k: m21key.Key, func: str
+) -> List[tuple[str, str, float]]:
     if k.mode == "minor":
         if func == "Tonic":
-            return ["iv", "VI", "VII", "V"]
+            return [
+                ("iv", "Moves away from the tonic into predominant space", 1.15),
+                ("VI", "Adds a broad minor-key lift", 0.95),
+                ("VII", "Keeps forward motion without over-resolving", 0.85),
+                ("V", "Builds a direct return path to i", 1.0),
+                ("ii°", "Adds tighter predominant tension", 0.55),
+                ("V/III", "Adds a brighter secondary push", 0.35),
+            ]
         if func == "Predominant":
-            return ["V", "vii°", "i"]
+            return [
+                ("V", "Classic predominant-to-dominant motion", 1.2),
+                ("vii°", "Tightens the pull into resolution", 0.8),
+                ("i", "Resolves the setup directly", 0.95),
+                ("III", "Turns the phrase toward a brighter landing", 0.65),
+                ("V/V", "Intensifies the dominant preparation", 0.35),
+            ]
         if func == "Dominant":
-            return ["i", "VI", "III"]
-        return _default_roman_pool(k)
+            return [
+                ("i", "Resolves the dominant cleanly", 1.2),
+                ("VI", "Uses a deceptive-style release", 0.95),
+                ("III", "Lets the phrase land more openly", 0.75),
+                ("iv", "Softens the cadence and keeps motion alive", 0.55),
+                ("VII", "Delays the full resolution", 0.45),
+            ]
+        return _default_recommendation_pool(k)
 
     if func == "Tonic":
-        return ["IV", "ii", "V", "vi"]
+        return [
+            ("IV", "Moves out of tonic space with a stable lift", 1.15),
+            ("ii", "Sets up a smooth predominant move", 1.05),
+            ("V", "Builds tension quickly", 1.0),
+            ("vi", "Extends the phrase without a hard cadence", 0.9),
+            ("iii", "Keeps the progression light and internal", 0.55),
+            ("V/ii", "Adds a small burst of secondary dominant color", 0.35),
+        ]
     if func == "Predominant":
-        return ["V", "vii°", "I"]
+        return [
+            ("V", "Classic predominant-to-dominant motion", 1.25),
+            ("vii°", "Sharpens the pull toward resolution", 0.8),
+            ("I", "Resolves the phrase directly", 0.95),
+            ("vi", "Uses a softer deceptive release", 0.85),
+            ("V/V", "Intensifies the dominant arrival", 0.45),
+        ]
     if func == "Dominant":
-        return ["I", "vi"]
-    return _default_roman_pool(k)
+        return [
+            ("I", "Resolves the dominant strongly", 1.25),
+            ("vi", "Creates a deceptive resolution", 0.95),
+            ("iii", "Lets the phrase continue instead of fully landing", 0.6),
+            ("IV", "Softens the cadence into a plagal color", 0.55),
+            ("ii", "Cycles back into predominant motion", 0.45),
+        ]
+    return _default_recommendation_pool(k)
+
+
+def _build_recommendation_pool(
+    k: m21key.Key, last_function: Optional[str]
+) -> List[tuple[str, str, float]]:
+    pool = _transition_recommendation_pool(k, last_function) if last_function else []
+    fallback = _default_recommendation_pool(k)
+    seen_figures = {figure for figure, _, _ in pool}
+    pool.extend(item for item in fallback if item[0] not in seen_figures)
+    return pool
 
 
 def _parse_forced_key(key_text: Optional[str]) -> Optional[m21key.Key]:
-    """
-    Parse manual key choices like:
-      - "C major"
-      - "A minor"
-      - "C" (major implied)
-      - "Am" (minor implied)
-    """
     if not key_text:
         return None
 
@@ -159,14 +224,10 @@ def _parse_forced_key(key_text: Optional[str]) -> Optional[m21key.Key]:
         return None
 
 
-# -----------------------------
-# Key inference
-# -----------------------------
-
 _CANDIDATE_KEYS: List[m21key.Key] = [
-    m21key.Key(p, "major") for p in ["C","C#","D","E-","E","F","F#","G","A-","A","B-","B"]
+    m21key.Key(p, "major") for p in ["C", "C#", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B"]
 ] + [
-    m21key.Key(p, "minor") for p in ["C","C#","D","E-","E","F","F#","G","A-","A","B-","B"]
+    m21key.Key(p, "minor") for p in ["C", "C#", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B"]
 ]
 
 
@@ -178,17 +239,12 @@ def _quality_bucket(cs: harmony.ChordSymbol) -> str:
         return "min"
     if "augmented" in kind:
         return "aug"
-    # Treat dominant/suspended/other non-minor types as major-ish for MVP.
     return "maj"
 
 
 def _key_scale_pcs(k: m21key.Key) -> set[int]:
     tonic = k.tonic.pitchClass
-    if k.mode == "major":
-        offsets = [0, 2, 4, 5, 7, 9, 11]
-    else:
-        # Natural minor baseline.
-        offsets = [0, 2, 3, 5, 7, 8, 10]
+    offsets = [0, 2, 4, 5, 7, 9, 11] if k.mode == "major" else [0, 2, 3, 5, 7, 8, 10]
     return {(tonic + o) % 12 for o in offsets}
 
 
@@ -197,7 +253,6 @@ def _allowed_diatonic_triads(k: m21key.Key) -> set[tuple[int, str]]:
     triads: set[tuple[int, str]] = set()
 
     if k.mode == "major":
-        # I ii iii IV V vi vii°
         triads.update(
             {
                 ((tonic + 0) % 12, "maj"),
@@ -210,7 +265,6 @@ def _allowed_diatonic_triads(k: m21key.Key) -> set[tuple[int, str]]:
             }
         )
     else:
-        # Natural minor: i ii° III iv v VI VII
         triads.update(
             {
                 ((tonic + 0) % 12, "min"),
@@ -220,11 +274,6 @@ def _allowed_diatonic_triads(k: m21key.Key) -> set[tuple[int, str]]:
                 ((tonic + 7) % 12, "min"),
                 ((tonic + 8) % 12, "maj"),
                 ((tonic + 10) % 12, "maj"),
-            }
-        )
-        # Harmonic-minor common borrow for functional harmony: V and vii°
-        triads.update(
-            {
                 ((tonic + 7) % 12, "maj"),
                 ((tonic + 11) % 12, "dim"),
             }
@@ -234,21 +283,15 @@ def _allowed_diatonic_triads(k: m21key.Key) -> set[tuple[int, str]]:
 
 
 def _infer_key_scores(symbols: List[str]) -> List[Tuple[m21key.Key, float]]:
-    """
-    Scores all 24 keys against the full progression.
-    Primary criterion is diatonic triad fit of each chord across the whole
-    progression, not just the latest chord.
-    """
     chords = [cs for s in symbols if (cs := _safe_chordsymbol(s))]
-
     if not chords:
         return [(m21key.Key("C", "major"), 0.0)]
 
     parsed: List[tuple[Optional[int], str, set[int]]] = []
     for cs in chords:
         try:
-            r = cs.root()
-            root_pc = r.pitchClass if r is not None else None
+            root = cs.root()
+            root_pc = root.pitchClass if root is not None else None
         except Exception:
             root_pc = None
         parsed.append((root_pc, _quality_bucket(cs), {p.pitchClass for p in cs.pitches}))
@@ -261,25 +304,21 @@ def _infer_key_scores(symbols: List[str]) -> List[Tuple[m21key.Key, float]]:
         tonic_pc = k.tonic.pitchClass
         dominant_pc = (tonic_pc + 7) % 12
 
-        # All chords contribute. Exact diatonic triad fit is strongest signal.
         for root_pc, quality, pcs in parsed:
             if root_pc is not None and (root_pc, quality) in allowed_triads:
                 score += 8.0
             elif root_pc is not None and root_pc in scale_pcs:
-                # Root in scale, but quality mismatch.
                 score += 1.5
             else:
                 score -= 6.0
 
-            # Extra penalty for out-of-scale chord tones.
             if pcs:
                 in_scale = len(pcs.intersection(scale_pcs))
                 out_of_scale = len(pcs) - in_scale
                 score += in_scale * 0.5
                 score -= out_of_scale * 2.5
 
-        # Small positional anchors.
-        roots = [r for r, _, _ in parsed]
+        roots = [root_pc for root_pc, _, _ in parsed]
         if roots:
             first_root = roots[0]
             last_root = roots[-1]
@@ -294,7 +333,7 @@ def _infer_key_scores(symbols: List[str]) -> List[Tuple[m21key.Key, float]]:
 
         scores.append((k, score))
 
-    scores.sort(key=lambda x: x[1], reverse=True)
+    scores.sort(key=lambda item: item[1], reverse=True)
     return scores
 
 
@@ -302,34 +341,18 @@ def infer_key_from_progression(symbols: List[str]) -> Tuple[str, float]:
     scores = _infer_key_scores(symbols)
     best_key, best = scores[0]
     second = scores[1][1] if len(scores) > 1 else (best - 1.0)
-
-    # Confidence from margin between top two candidate keys.
     margin = best - second
     conf = max(0.0, min(1.0, 0.5 + 0.03 * margin))
     return (_format_key_name(best_key), conf)
 
 
-# -----------------------------
-# Recommendation engine (MVP)
-# -----------------------------
-
 def recommend_next_chords(
     progression: List[str],
     current_chord: Optional[str] = None,
-    max_recs: int = 6,
+    max_recs: int = _TARGET_RECOMMENDATIONS,
     forced_key: Optional[str] = None,
     previous_key: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """
-    Returns:
-      {
-        key_guess: "C major",
-        confidence: 0.73,
-        recommendations: [{chord, reason, roman, function}, ...]
-      }
-    """
-    # Primary context comes from the full progression built in the UI.
-    # Fall back to the currently detected chord only when progression is empty.
     working = [p for p in progression if p]
     if not working and current_chord:
         working = [current_chord]
@@ -345,26 +368,23 @@ def recommend_next_chords(
     else:
         scores = _infer_key_scores(working)
         debug_key_scores = [
-            {"key": _format_key_name(cand), "score": round(score, 3)}
-            for cand, score in scores[:8]
+            {"key": _format_key_name(candidate), "score": round(score, 3)}
+            for candidate, score in scores[:8]
         ]
         best_key, best_score = scores[0]
         key_guess = _format_key_name(best_key)
         second_score = scores[1][1] if len(scores) > 1 else (best_score - 1.0)
         confidence = max(0.0, min(1.0, 0.5 + 0.03 * (best_score - second_score)))
 
-        # Stability guard: in auto mode, avoid switching keys unless the new
-        # best key clearly beats the previously chosen key.
         previous = _parse_forced_key(previous_key)
         if previous:
             prev_name = _format_key_name(previous)
-            score_by_name = {_format_key_name(cand): s for cand, s in scores}
+            score_by_name = {_format_key_name(candidate): score for candidate, score in scores}
             prev_score = score_by_name.get(prev_name)
-            if prev_score is not None:
-                switch_margin = 8.0
-                if (best_score - prev_score) < switch_margin:
-                    key_guess = prev_name
-                    confidence = max(confidence, 0.55)
+            if prev_score is not None and (best_score - prev_score) < 8.0:
+                key_guess = prev_name
+                confidence = max(confidence, 0.55)
+
         for item in debug_key_scores:
             if item["key"] == key_guess:
                 item["selected"] = True
@@ -374,67 +394,55 @@ def recommend_next_chords(
 
     last_sym = working[-1] if working else None
     last_cs = _safe_chordsymbol(last_sym) if last_sym else None
-
-    roman_pool = _default_roman_pool(k)
-
-    # If we can classify the last chord, bias transitions by function
+    last_function: Optional[str] = None
     if last_cs:
         try:
             last_rn = roman.romanNumeralFromChord(last_cs, k).figure
-            func = _function_from_roman(last_rn)
-            if k.mode == "minor":
-                roman_pool = _transition_roman_pool(k, func)
-            elif func == "Tonic":
-                roman_pool = ["IV", "ii", "V", "vi"]
-            elif func == "Predominant":
-                roman_pool = ["V", "vii°", "I"]
-            elif func == "Dominant":
-                roman_pool = ["I", "vi"]
+            last_function = _function_from_roman(last_rn)
         except Exception:
             pass
 
     recs: List[Dict[str, str]] = []
+    seen_chords: set[str] = set()
+    recommendation_limit = max(1, min(max_recs, _TARGET_RECOMMENDATIONS))
 
-    def add_rec(figure: str, reason: str) -> None:
+    def add_rec(figure: str, reason: str) -> Optional[Dict[str, str]]:
         try:
             rn_obj = roman.RomanNumeral(figure, k)
-            sym = _symbol_from_chord_obj(chord.Chord(rn_obj.pitches))
-            recs.append(
-                {
-                    "chord": sym,
-                    "roman": figure,
-                    "function": _function_from_roman(figure),
-                    "reason": reason,
-                }
-            )
+            symbol = _symbol_from_chord_obj(chord.Chord(rn_obj.pitches))
+            return {
+                "chord": symbol,
+                "roman": figure,
+                "function": _function_from_roman(figure),
+                "reason": reason,
+            }
         except Exception:
-            return
+            return None
 
-    # Core diatonic suggestions
-    for fig in roman_pool:
-        add_rec(fig, f"Diatonic choice in {key_guess}")
-
-    # Add 1–2 “spicier but common” options (dominant 7 and V/vi-style hint)
-    # Keep it demo-safe: only add if we can interpret them
-    add_rec("V7", "Adds tension that resolves strongly")
-    add_rec("V", "Classic dominant resolution")
-
-    # De-dup while preserving order
-    seen = set()
-    uniq = []
-    for r in recs:
-        if r["chord"] in seen:
+    for figure, reason, _weight in _weighted_shuffle(_build_recommendation_pool(k, last_function)):
+        rec = add_rec(figure, reason)
+        if not rec or rec["chord"] in seen_chords:
             continue
-        seen.add(r["chord"])
-        uniq.append(r)
-        if len(uniq) >= max_recs:
+        seen_chords.add(rec["chord"])
+        recs.append(rec)
+        if len(recs) >= recommendation_limit:
             break
 
+    if len(recs) < recommendation_limit:
+        for figure, reason, _weight in _default_recommendation_pool(k):
+            rec = add_rec(figure, reason)
+            if not rec or rec["chord"] in seen_chords:
+                continue
+            seen_chords.add(rec["chord"])
+            recs.append(rec)
+            if len(recs) >= recommendation_limit:
+                break
+
     return {
-        "engine_version": "keyfit-v3-debug",
+        "engine_version": "keyfit-v4-varied",
         "key_guess": key_guess,
         "confidence": confidence,
-        "recommendations": uniq,
+        "recommendations": recs,
         "debug_progression_used": working,
         "debug_key_scores": debug_key_scores,
     }
