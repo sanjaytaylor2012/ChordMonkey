@@ -4,15 +4,17 @@ import React, { useRef, useState } from "react";
 import {url} from "@/lib/utils";
 
 interface RecordingSectionProps {
-  onMidiConverted?: (midiBlob: Blob) => void;
+  onRecordingAnalyzed?: (analysis: unknown) => void;
 }
 
 export default function RecordingSection({
-  onMidiConverted,
+  onRecordingAnalyzed,
 }: RecordingSectionProps) {
 
   const TRANSCRIBE_URL =
     `${url}/transcribe-to-midi`;
+  const ANALYZE_URL =
+    `${url}/analyze-midi`;
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -72,22 +74,24 @@ export default function RecordingSection({
       const form = new FormData();
       form.append("file", file);
 
-      const resp = await fetch(TRANSCRIBE_URL, { method: "POST", body: form });
-      if (!resp.ok) throw new Error(await resp.text());
+      const transcribeResp = await fetch(TRANSCRIBE_URL, { method: "POST", body: form });
+      if (!transcribeResp.ok) throw new Error(await transcribeResp.text());
 
-      const midiBlob = await resp.blob();
+      const midiBlob = await transcribeResp.blob();
+      const midiFile = new File([midiBlob], "output.mid", {
+        type: "audio/midi",
+      });
+      const midiForm = new FormData();
+      midiForm.append("file", midiFile);
 
-      if (onMidiConverted) {
-        onMidiConverted(midiBlob);
+      const analyzeResp = await fetch(ANALYZE_URL, { method: "POST", body: midiForm });
+      if (!analyzeResp.ok) throw new Error(await analyzeResp.text());
+
+      const analysis = await analyzeResp.json();
+
+      if (onRecordingAnalyzed) {
+        onRecordingAnalyzed(analysis);
       }
-
-      // Download the MIDI file
-      const midiUrl = URL.createObjectURL(midiBlob);
-      const a = document.createElement("a");
-      a.href = midiUrl;
-      a.download = "output.mid";
-      a.click();
-      URL.revokeObjectURL(midiUrl);
     } catch (e: any) {
       setError(e?.message ?? "Conversion failed");
     } finally {

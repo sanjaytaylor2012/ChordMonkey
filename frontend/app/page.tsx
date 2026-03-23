@@ -7,9 +7,6 @@ import ChordDisplay from "@/components/ChordDisplay";
 import ChordRecommendations from "@/components/ChordRecommendations";
 import ChordProgression, { SongSection } from "@/components/ChordProgression";
 import ParticlesBackground from "@/components/ParticlesBackground";
-import {url} from "@/lib/utils";
-
-const ANALYZE_URL = `${url}/analyze-midi`
 
 function createSection(sectionNumber: number, chords: string[] = []): SongSection {
   return {
@@ -121,19 +118,8 @@ export default function Home() {
     );
   }
 
-  // Called when MIDI conversion completes
-  async function handleMidiConverted(midiBlob: Blob) {
+  function handleRecordingAnalyzed(analysis: any) {
     try {
-      const midiFile = new File([midiBlob], "output.mid", {
-        type: "audio/midi",
-      });
-      const form = new FormData();
-      form.append("file", midiFile);
-
-      const resp = await fetch(ANALYZE_URL, { method: "POST", body: form });
-      if (!resp.ok) throw new Error(await resp.text());
-
-      const analysis = await resp.json();
       const first = analysis?.events?.[0];
 
       if (!first) {
@@ -175,7 +161,7 @@ export default function Home() {
         <div className="relative z-10 max-w-6xl mx-auto px-6 py-8">
           {/* Recording Section */}
           <div className="mb-8">
-            <RecordingSection onMidiConverted={handleMidiConverted} />
+            <RecordingSection onRecordingAnalyzed={handleRecordingAnalyzed} />
           </div>
 
           {/* Chord Display + Recommendations */}
