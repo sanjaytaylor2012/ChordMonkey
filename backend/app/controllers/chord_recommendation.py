@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from music21 import harmony, key as m21key, roman, chord
@@ -12,6 +13,39 @@ from music21 import harmony, key as m21key, roman, chord
 def _display_note_name(name: str) -> str:
     return name.replace("-", "b")
 
+
+_ROOT_NOTE_RE = re.compile(r"^([A-Ga-g])([#b-]?)(.*)$")
+
+
+def _normalize_symbol_for_music21(sym: str) -> str:
+    """
+    Convert flat spellings like Bb, Ebm7, or F/Bb to music21's hyphen style.
+    """
+    if not sym:
+        return sym
+
+    text = sym.strip().replace("♭", "b").replace("♯", "#")
+    parts = text.split("/", 1)
+    normalized_parts: List[str] = []
+
+    for part in parts:
+        match = _ROOT_NOTE_RE.match(part)
+        if not match:
+            normalized_parts.append(part)
+            continue
+
+        note, accidental, rest = match.groups()
+        if accidental == "b":
+            accidental = "-"
+        normalized_parts.append(f"{note.upper()}{accidental}{rest}")
+
+    return "/".join(normalized_parts)
+
+
+def _format_key_name(k: m21key.Key) -> str:
+    return f"{_display_note_name(k.tonic.name)} {k.mode}"
+
+
 def _safe_chordsymbol(sym: str) -> Optional[harmony.ChordSymbol]:
     """
     Parse symbols like: C, Am, F#, Bb, G7, Dm7, Bdim, etc.
@@ -20,6 +54,7 @@ def _safe_chordsymbol(sym: str) -> Optional[harmony.ChordSymbol]:
     sym = (sym or "").strip()
     if not sym:
         return None
+    sym = _normalize_symbol_for_music21(sym)
     try:
         return harmony.ChordSymbol(sym)
     except Exception:
@@ -271,7 +306,7 @@ def infer_key_from_progression(symbols: List[str]) -> Tuple[str, float]:
     # Confidence from margin between top two candidate keys.
     margin = best - second
     conf = max(0.0, min(1.0, 0.5 + 0.03 * margin))
-    return (f"{best_key.tonic.name} {best_key.mode}", conf)
+    return (_format_key_name(best_key), conf)
 
 
 # -----------------------------
@@ -304,17 +339,17 @@ def recommend_next_chords(
     forced = _parse_forced_key(forced_key)
     if forced:
         k = forced
-        key_guess = f"{k.tonic.name} {k.mode}"
+        key_guess = _format_key_name(k)
         confidence = 1.0
         debug_key_scores = [{"key": key_guess, "score": None, "selected": True}]
     else:
         scores = _infer_key_scores(working)
         debug_key_scores = [
-            {"key": f"{cand.tonic.name} {cand.mode}", "score": round(score, 3)}
+            {"key": _format_key_name(cand), "score": round(score, 3)}
             for cand, score in scores[:8]
         ]
         best_key, best_score = scores[0]
-        key_guess = f"{best_key.tonic.name} {best_key.mode}"
+        key_guess = _format_key_name(best_key)
         second_score = scores[1][1] if len(scores) > 1 else (best_score - 1.0)
         confidence = max(0.0, min(1.0, 0.5 + 0.03 * (best_score - second_score)))
 
@@ -322,8 +357,8 @@ def recommend_next_chords(
         # best key clearly beats the previously chosen key.
         previous = _parse_forced_key(previous_key)
         if previous:
-            prev_name = f"{previous.tonic.name} {previous.mode}"
-            score_by_name = {f"{cand.tonic.name} {cand.mode}": s for cand, s in scores}
+            prev_name = _format_key_name(previous)
+            score_by_name = {_format_key_name(cand): s for cand, s in scores}
             prev_score = score_by_name.get(prev_name)
             if prev_score is not None:
                 switch_margin = 8.0
