@@ -22,6 +22,10 @@ WORKDIR /app
 ENV UV_PIP_ONLY_BINARY=:all:
 ENV PIP_ONLY_BINARY=:all:
 
+# Numba/librosa cache in a writable location (avoids "no locator available" errors)
+ENV NUMBA_CACHE_DIR=/tmp/numba-cache
+RUN mkdir -p /tmp/numba-cache && chmod -R 777 /tmp/numba-cache
+
 # Python deps
 # install from lockfile
 COPY pyproject.toml uv.lock ./

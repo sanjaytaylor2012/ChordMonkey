@@ -2,22 +2,22 @@
 
 import React from "react";
 import GuitarDiagram from "./GuitarDiagram";
-import url from "@/lib/utils";
+import { url } from "@/lib/utils";
 
 const CHORD_NAMES: Record<string, string> = {
-  "C": "C Major",
-  "D": "D Major",
-  "E": "E Major",
-  "F": "F Major",
-  "G": "G Major",
-  "A": "A Major",
-  "B": "B Major",
-  "Am": "A Minor",
-  "Dm": "D Minor",
-  "Em": "E Minor",
-  "Fm": "F Minor",
-  "Gm": "G Minor",
-  "Bm": "B Minor",
+  C: "C Major",
+  D: "D Major",
+  E: "E Major",
+  F: "F Major",
+  G: "G Major",
+  A: "A Major",
+  B: "B Major",
+  Am: "A Minor",
+  Dm: "D Minor",
+  Em: "E Minor",
+  Fm: "F Minor",
+  Gm: "G Minor",
+  Bm: "B Minor",
 };
 
 interface ChordDisplayProps {
