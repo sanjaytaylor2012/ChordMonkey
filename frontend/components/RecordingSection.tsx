@@ -2,13 +2,25 @@
 
 import React, { useRef, useState } from "react";
 import {url} from "@/lib/utils";
+import type {
+  DisplayInstrument,
+  RecommendationLevel,
+} from "@/lib/create-page-types";
 
 interface RecordingSectionProps {
   onRecordingAnalyzed?: (analysis: unknown) => void;
+  displayInstrument: DisplayInstrument;
+  recommendationLevel: RecommendationLevel;
+  onDisplayInstrumentChange: (instrument: DisplayInstrument) => void;
+  onRecommendationLevelChange: (level: RecommendationLevel) => void;
 }
 
 export default function RecordingSection({
   onRecordingAnalyzed,
+  displayInstrument,
+  recommendationLevel,
+  onDisplayInstrumentChange,
+  onRecommendationLevelChange,
 }: RecordingSectionProps) {
 
   const TRANSCRIBE_URL =
@@ -52,7 +64,7 @@ export default function RecordingSection({
 
       mr.start();
       setIsRecording(true);
-    } catch (err) {
+    } catch {
       setError("Could not access microphone");
     }
   }
@@ -92,8 +104,10 @@ export default function RecordingSection({
       if (onRecordingAnalyzed) {
         onRecordingAnalyzed(analysis);
       }
-    } catch (e: any) {
-      setError(e?.message ?? "Conversion failed");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Conversion failed";
+      setError(message);
     } finally {
       setBusy(false);
     }
@@ -101,9 +115,61 @@ export default function RecordingSection({
 
   return (
     <div className="flex flex-col">
-      <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">
-        Recording
-      </h2>
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          Recording
+        </h2>
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center rounded-lg border border-border bg-card p-1">
+            <button
+              type="button"
+              onClick={() => onDisplayInstrumentChange("guitar")}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                displayInstrument === "guitar"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              Guitar
+            </button>
+            <button
+              type="button"
+              onClick={() => onDisplayInstrumentChange("keyboard")}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                displayInstrument === "keyboard"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              Keyboard
+            </button>
+          </div>
+          <div className="flex items-center rounded-lg border border-border bg-card p-1">
+            <button
+              type="button"
+              onClick={() => onRecommendationLevelChange("beginner")}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                recommendationLevel === "beginner"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              Beginner
+            </button>
+            <button
+              type="button"
+              onClick={() => onRecommendationLevelChange("advanced")}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                recommendationLevel === "advanced"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              Advanced
+            </button>
+          </div>
+        </div>
+      </div>
       <div className="bg-card border border-border rounded-xl p-6">
         {/* Waveform Placeholder */}
         <div className="bg-muted h-16 rounded-lg mb-5 flex items-center justify-center">

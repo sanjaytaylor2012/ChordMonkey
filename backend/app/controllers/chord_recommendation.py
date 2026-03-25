@@ -12,7 +12,10 @@ def _display_note_name(name: str) -> str:
 
 
 _ROOT_NOTE_RE = re.compile(r"^([A-Ga-g])([#b-]?)(.*)$")
-_TARGET_RECOMMENDATIONS = 4
+_BEGINNER_TARGET_RECOMMENDATIONS = 4
+_ADVANCED_TARGET_RECOMMENDATIONS = 5
+_BEGINNER = "beginner"
+_ADVANCED = "advanced"
 
 
 def _normalize_symbol_for_music21(sym: str) -> str:
@@ -194,6 +197,83 @@ def _build_recommendation_pool(
     return pool
 
 
+def _beginner_recommendation_pool(
+    k: m21key.Key, last_function: Optional[str]
+) -> List[tuple[str, str, float]]:
+    if k.mode == "minor":
+        if last_function == "Tonic":
+            return [
+                ("iv", "Moves gently away from tonic while staying in key", 1.15),
+                ("VI", "Adds a familiar lift inside the minor scale", 1.0),
+                ("VII", "Keeps the phrase moving simply", 0.95),
+                ("v", "Builds a soft diatonic dominant pull", 1.05),
+                ("III", "Adds a stable related-color chord", 0.8),
+                ("ii°", "Adds light diatonic tension", 0.45),
+            ]
+        if last_function == "Predominant":
+            return [
+                ("v", "Continues the phrase toward a simple cadence", 1.2),
+                ("i", "Resolves directly back home", 1.0),
+                ("VI", "Creates a gentle release", 0.9),
+                ("III", "Lets the phrase land in a related major chord", 0.75),
+                ("VII", "Keeps the phrase open and moving", 0.7),
+                ("ii°", "Adds a bit more diatonic tension", 0.4),
+            ]
+        if last_function == "Dominant":
+            return [
+                ("i", "Resolves clearly to tonic", 1.25),
+                ("VI", "Offers a softer deceptive move", 0.95),
+                ("III", "Lands in a stable related chord", 0.8),
+                ("iv", "Keeps the phrase going after the cadence", 0.65),
+                ("VII", "Delays the full resolution slightly", 0.55),
+            ]
+        return [
+            ("i", "Re-centers the progression on tonic", 1.1),
+            ("III", "Brightens the progression without leaving key", 0.85),
+            ("iv", "Adds basic predominant motion", 1.0),
+            ("v", "Creates gentle tension before resolving", 1.05),
+            ("VI", "Adds a familiar minor-key lift", 0.95),
+            ("VII", "Keeps things moving with simple diatonic color", 0.8),
+            ("ii°", "Adds mild diatonic tension", 0.4),
+        ]
+
+    if last_function == "Tonic":
+        return [
+            ("IV", "Moves out of tonic space in a familiar way", 1.15),
+            ("ii", "Sets up a clean diatonic transition", 1.05),
+            ("V", "Builds straightforward tension", 1.0),
+            ("vi", "Keeps the progression soft and stable", 0.95),
+            ("iii", "Adds a lighter in-key color", 0.7),
+            ("vii°", "Introduces gentle leading-tone tension", 0.4),
+        ]
+    if last_function == "Predominant":
+        return [
+            ("V", "Classic move into dominant", 1.25),
+            ("I", "Resolves the phrase directly", 1.0),
+            ("vi", "Creates a softer release", 0.9),
+            ("ii", "Extends the predominant feeling", 0.8),
+            ("iii", "Keeps the progression moving inside the key", 0.65),
+            ("vii°", "Adds a touch of diatonic tension", 0.35),
+        ]
+    if last_function == "Dominant":
+        return [
+            ("I", "Resolves strongly back to tonic", 1.25),
+            ("vi", "Uses a simple deceptive move", 0.95),
+            ("IV", "Keeps the phrase open without extra color", 0.8),
+            ("iii", "Lets the line continue instead of fully settling", 0.65),
+            ("ii", "Cycles back into a simple setup chord", 0.55),
+        ]
+    return [
+        ("I", "Reaffirms the home key", 1.0),
+        ("ii", "Smoothly opens up the harmony", 0.95),
+        ("iii", "Keeps things inside the key", 0.7),
+        ("IV", "Opens the progression with a stable lift", 1.0),
+        ("V", "Builds tension that wants to resolve", 1.1),
+        ("vi", "Extends the tonic feel with a softer turn", 0.9),
+        ("vii°", "Adds light leading-tone tension", 0.35),
+    ]
+
+
 def _parse_forced_key(key_text: Optional[str]) -> Optional[m21key.Key]:
     if not key_text:
         return None
@@ -349,7 +429,8 @@ def infer_key_from_progression(symbols: List[str]) -> Tuple[str, float]:
 def recommend_next_chords(
     progression: List[str],
     current_chord: Optional[str] = None,
-    max_recs: int = _TARGET_RECOMMENDATIONS,
+    max_recs: int = _ADVANCED_TARGET_RECOMMENDATIONS,
+    level: str = _BEGINNER,
     forced_key: Optional[str] = None,
     previous_key: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -404,7 +485,13 @@ def recommend_next_chords(
 
     recs: List[Dict[str, str]] = []
     seen_chords: set[str] = set()
-    recommendation_limit = max(1, min(max_recs, _TARGET_RECOMMENDATIONS))
+    recommendation_level = level if level in {_BEGINNER, _ADVANCED} else _BEGINNER
+    recommendation_cap = (
+        _ADVANCED_TARGET_RECOMMENDATIONS
+        if recommendation_level == _ADVANCED
+        else _BEGINNER_TARGET_RECOMMENDATIONS
+    )
+    recommendation_limit = max(1, min(max_recs, recommendation_cap))
 
     def add_rec(figure: str, reason: str) -> Optional[Dict[str, str]]:
         try:
@@ -419,7 +506,12 @@ def recommend_next_chords(
         except Exception:
             return None
 
-    for figure, reason, _weight in _weighted_shuffle(_build_recommendation_pool(k, last_function)):
+    if recommendation_level == _ADVANCED:
+        recommendation_pool = _build_recommendation_pool(k, last_function)
+    else:
+        recommendation_pool = _beginner_recommendation_pool(k, last_function)
+
+    for figure, reason, _weight in _weighted_shuffle(recommendation_pool):
         rec = add_rec(figure, reason)
         if not rec or rec["chord"] in seen_chords:
             continue
@@ -429,7 +521,12 @@ def recommend_next_chords(
             break
 
     if len(recs) < recommendation_limit:
-        for figure, reason, _weight in _default_recommendation_pool(k):
+        fallback_pool = (
+            _default_recommendation_pool(k)
+            if recommendation_level == _ADVANCED
+            else _beginner_recommendation_pool(k, None)
+        )
+        for figure, reason, _weight in fallback_pool:
             rec = add_rec(figure, reason)
             if not rec or rec["chord"] in seen_chords:
                 continue
@@ -439,7 +536,7 @@ def recommend_next_chords(
                 break
 
     return {
-        "engine_version": "keyfit-v4-varied",
+        "engine_version": f"keyfit-v4-{recommendation_level}",
         "key_guess": key_guess,
         "confidence": confidence,
         "recommendations": recs,

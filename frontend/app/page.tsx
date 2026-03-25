@@ -7,6 +7,19 @@ import ChordDisplay from "@/components/ChordDisplay";
 import ChordRecommendations from "@/components/ChordRecommendations";
 import ChordProgression, { SongSection } from "@/components/ChordProgression";
 import ParticlesBackground from "@/components/ParticlesBackground";
+import type {
+  DisplayInstrument,
+  RecommendationLevel,
+} from "@/lib/create-page-types";
+
+interface MidiAnalysisEvent {
+  symbol?: string;
+  pitch_classes?: string[];
+}
+
+interface MidiAnalysis {
+  events?: MidiAnalysisEvent[];
+}
 
 function createSection(sectionNumber: number, chords: string[] = []): SongSection {
   return {
@@ -17,6 +30,11 @@ function createSection(sectionNumber: number, chords: string[] = []): SongSectio
 }
 
 export default function Home() {
+  const [displayInstrument, setDisplayInstrument] =
+    useState<DisplayInstrument>("guitar");
+  const [recommendationLevel, setRecommendationLevel] =
+    useState<RecommendationLevel>("beginner");
+
   // Current detected chord from audio
   const [detectedChord, setDetectedChord] = useState<string | null>("Am");
 
@@ -40,6 +58,20 @@ export default function Home() {
   // Handle selecting a chord from recommendations
   function handleSelectChord(chord: string) {
     setSelectedChord(chord);
+  }
+
+  function handleSelectProgressionChord(
+    sectionIndex: number,
+    chordIndex: number,
+    chord: string,
+  ) {
+    setSelectedChord(chord);
+    setCurrentSectionIndex(sectionIndex);
+    setCurrentChordIndex(chordIndex);
+  }
+
+  function handleRefreshRecommendations() {
+    setLastAddedChord(null);
   }
 
   // Handle adding a chord to the progression
@@ -118,19 +150,19 @@ export default function Home() {
     );
   }
 
-  function handleRecordingAnalyzed(analysis: any) {
+  function handleRecordingAnalyzed(analysis: MidiAnalysis) {
     try {
       const first = analysis?.events?.[0];
 
       if (!first) {
         setDetectedChord("(no chord detected)");
+        setSelectedChord(null);
         return;
       }
 
       if (first.symbol) {
         setDetectedChord(first.symbol);
-        return;
-        setDetectedChord(first.symbol);
+        setSelectedChord(null);
         return;
       }
 
@@ -138,12 +170,14 @@ export default function Home() {
 
       if (symbol) {
         setDetectedChord(symbol);
+        setSelectedChord(null);
         return;
       }
 
       const pcs: string[] | undefined = first.pitch_classes;
       if (pcs && pcs.length >= 2) {
         setDetectedChord(pcs[0]);
+        setSelectedChord(null);
       }
     } catch (e) {
       console.error("Analyze MIDI failed:", e);
@@ -151,7 +185,7 @@ export default function Home() {
   }
 
   // The chord to display
-  const displayChord = detectedChord;
+  const displayChord = selectedChord ?? detectedChord;
 
   return (
     <>
@@ -161,7 +195,13 @@ export default function Home() {
         <div className="relative z-10 max-w-6xl mx-auto px-6 py-8">
           {/* Recording Section */}
           <div className="mb-8">
-            <RecordingSection onRecordingAnalyzed={handleRecordingAnalyzed} />
+            <RecordingSection
+              onRecordingAnalyzed={handleRecordingAnalyzed}
+              displayInstrument={displayInstrument}
+              recommendationLevel={recommendationLevel}
+              onDisplayInstrumentChange={setDisplayInstrument}
+              onRecommendationLevelChange={setRecommendationLevel}
+            />
           </div>
 
           {/* Chord Display + Recommendations */}
@@ -170,12 +210,15 @@ export default function Home() {
               chord={displayChord}
               label={selectedChord ? "Selected Chord" : "Detected Chord"}
               onAddChord={handleAddChord}
+              instrument={displayInstrument}
             />
             <ChordRecommendations
               currentChord={detectedChord}
               selectedChord={selectedChord}
               lastAddedChord={lastAddedChord}
               progression={progression}
+              level={recommendationLevel}
+              onRefreshRecommendations={handleRefreshRecommendations}
               onSelectChord={handleSelectChord}
               onAddChord={handleAddChord}
             />
@@ -188,6 +231,7 @@ export default function Home() {
               currentSectionIndex={currentSectionIndex}
               currentChordIndex={currentChordIndex}
               onClear={handleClear}
+              onSelectChord={handleSelectProgressionChord}
               onAddChord={handleAddChordToSection}
               onRemoveChord={handleRemoveChord}
               onAddSection={handleAddSection}

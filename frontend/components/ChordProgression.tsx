@@ -13,6 +13,7 @@ interface ChordProgressionProps {
   currentSectionIndex: number | null;
   currentChordIndex: number | null;
   onClear: () => void;
+  onSelectChord: (sectionIndex: number, chordIndex: number, chord: string) => void;
   onAddChord: (sectionIndex: number, chord: string) => void;
   onRemoveChord: (sectionIndex: number, chordIndex: number) => void;
   onAddSection: () => void;
@@ -100,6 +101,7 @@ export default function ChordProgression({
   currentSectionIndex,
   currentChordIndex,
   onClear,
+  onSelectChord,
   onAddChord,
   onRemoveChord,
   onAddSection,
@@ -210,6 +212,15 @@ export default function ChordProgression({
                 {section.chords.map((chord, chordIndex) => (
                   <div
                     key={`${section.id}-${chordIndex}-${chord}`}
+                    onClick={() => onSelectChord(sectionIndex, chordIndex, chord)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onSelectChord(sectionIndex, chordIndex, chord);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
                     className={`relative min-w-[70px] min-h-[86px] px-5 py-4 rounded-lg border-2 text-center transition-colors ${
                       sectionIndex === currentSectionIndex && chordIndex === currentChordIndex
                         ? "border-primary bg-primary/10"
@@ -220,7 +231,10 @@ export default function ChordProgression({
                   >
                     <button
                       type="button"
-                      onClick={() => onRemoveChord(sectionIndex, chordIndex)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onRemoveChord(sectionIndex, chordIndex);
+                      }}
                       className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-sm bg-red-600 text-xs font-bold leading-none text-white transition-colors hover:bg-red-700"
                       aria-label={`Remove ${chord} from progression`}
                       title="Remove chord"
