@@ -143,12 +143,12 @@ export default function RecordingSection({
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
           Recording
         </h2>
-        <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+        <div className="flex items-center justify-center gap-2 sm:justify-end">
           <div className="flex items-center rounded-lg border border-border bg-card p-1 w-fit">
             <button
               type="button"
               onClick={() => onDisplayInstrumentChange("guitar")}
-              className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+              className={`rounded-md px-2 py-1 text-[10px] sm:px-3 sm:py-1.5 sm:text-xs font-semibold uppercase tracking-wide transition-colors ${
                 displayInstrument === "guitar"
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted"
@@ -159,7 +159,7 @@ export default function RecordingSection({
             <button
               type="button"
               onClick={() => onDisplayInstrumentChange("keyboard")}
-              className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+              className={`rounded-md px-2 py-1 text-[10px] sm:px-3 sm:py-1.5 sm:text-xs font-semibold uppercase tracking-wide transition-colors ${
                 displayInstrument === "keyboard"
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted"
@@ -172,7 +172,7 @@ export default function RecordingSection({
             <button
               type="button"
               onClick={() => onRecommendationLevelChange("beginner")}
-              className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+              className={`rounded-md px-2 py-1 text-[10px] sm:px-3 sm:py-1.5 sm:text-xs font-semibold uppercase tracking-wide transition-colors ${
                 recommendationLevel === "beginner"
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted"
@@ -183,7 +183,7 @@ export default function RecordingSection({
             <button
               type="button"
               onClick={() => onRecommendationLevelChange("advanced")}
-              className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+              className={`rounded-md px-2 py-1 text-[10px] sm:px-3 sm:py-1.5 sm:text-xs font-semibold uppercase tracking-wide transition-colors ${
                 recommendationLevel === "advanced"
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted"
