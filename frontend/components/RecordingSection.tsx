@@ -143,8 +143,8 @@ export default function RecordingSection({
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
           Recording
         </h2>
-        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-          <div className="flex items-center rounded-lg border border-border bg-card p-1">
+        <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+          <div className="flex items-center rounded-lg border border-border bg-card p-1 w-fit">
             <button
               type="button"
               onClick={() => onDisplayInstrumentChange("guitar")}
@@ -168,7 +168,7 @@ export default function RecordingSection({
               Keyboard
             </button>
           </div>
-          <div className="flex items-center rounded-lg border border-border bg-card p-1">
+          <div className="flex items-center rounded-lg border border-border bg-card p-1 w-fit">
             <button
               type="button"
               onClick={() => onRecommendationLevelChange("beginner")}

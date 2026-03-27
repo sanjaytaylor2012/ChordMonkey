@@ -75,11 +75,11 @@ export function SectionBlock({
         onCommit={(nextTitle) => onRenameSection(sectionIndex, nextTitle)}
       />
 
-      <div className="flex gap-3 flex-wrap">
+      <div className="flex gap-3 flex-wrap items-stretch">
         {section.chords.map((chord, chordIndex) => (
           <div
             key={`${section.id}-${chordIndex}-${chord}`}
-            className={`relative min-w-[70px] min-h-[86px] px-5 py-4 rounded-lg border-2 text-center transition-colors ${
+            className={`relative min-w-[70px] px-5 py-4 rounded-lg border-2 text-center transition-colors ${
               sectionIndex === playingSectionIndex && chordIndex === playingChordIndex
                 ? "border-blue-500 bg-blue-500/10"
                 : sectionIndex === currentSectionIndex && chordIndex === currentChordIndex
@@ -112,13 +112,13 @@ export function SectionBlock({
           </div>
         ))}
 
-        <div className="relative" ref={openAddMenuSection === sectionIndex ? addMenuRef : null}>
+        <div className="relative flex" ref={openAddMenuSection === sectionIndex ? addMenuRef : null}>
           <button
             type="button"
             onClick={() =>
               setOpenAddMenuSection(openAddMenuSection === sectionIndex ? null : sectionIndex)
             }
-            className="min-w-[70px] min-h-[86px] px-5 py-4 rounded-lg border-2 border-dashed border-border flex items-center justify-center text-2xl text-muted-foreground cursor-pointer hover:border-muted-foreground hover:text-foreground transition-colors"
+            className="min-w-[70px] px-5 py-4 rounded-lg border-2 border-dashed border-border flex items-center justify-center text-2xl text-muted-foreground cursor-pointer hover:border-muted-foreground hover:text-foreground transition-colors self-stretch"
             aria-label="Add chord to progression"
             aria-expanded={openAddMenuSection === sectionIndex}
           >

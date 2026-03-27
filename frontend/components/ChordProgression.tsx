@@ -171,7 +171,7 @@ export default function ChordProgression({
         Your Chord Progression
       </h2>
       <div className="bg-card border border-border rounded-xl p-6">
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex flex-col gap-3 mb-5 sm:flex-row sm:items-center sm:justify-between">
           {isEditingTitle ? (
             <input
               type="text"
@@ -180,7 +180,7 @@ export default function ChordProgression({
               onBlur={handleTitleBlur}
               onKeyDown={handleTitleKeyDown}
               autoFocus
-              className="text-base font-semibold text-foreground bg-transparent border-b border-primary outline-none px-1"
+              className="text-base font-semibold text-foreground bg-transparent border-b border-primary outline-none px-1 w-full sm:w-auto"
             />
           ) : (
             <button
