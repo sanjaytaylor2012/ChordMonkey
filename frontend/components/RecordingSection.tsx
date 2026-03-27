@@ -70,18 +70,36 @@ export default function RecordingSection({
   }
 
   function stopRecording() {
-    mediaRecorderRef.current?.stop();
-    setIsRecording(false);
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") {
+      return Promise.resolve<Blob | null>(audioBlob);
+    }
+
+    return new Promise<Blob | null>((resolve) => {
+      const originalOnStop = recorder.onstop;
+
+      recorder.onstop = () => {
+        originalOnStop?.call(recorder, new Event("stop"));
+        const recordedBlob = new Blob(chunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        resolve(recordedBlob);
+      };
+
+      recorder.stop();
+      setIsRecording(false);
+    });
   }
 
-  async function convertToMidi() {
-    if (!audioBlob) return;
+  async function convertToMidi(blobOverride?: Blob | null) {
+    const blobToConvert = blobOverride ?? audioBlob;
+    if (!blobToConvert) return;
     setBusy(true);
     setError(null);
 
     try {
-      const file = new File([audioBlob], "recording.webm", {
-        type: audioBlob.type || "audio/webm",
+      const file = new File([blobToConvert], "recording.webm", {
+        type: blobToConvert.type || "audio/webm",
       });
       const form = new FormData();
       form.append("file", file);
@@ -111,6 +129,11 @@ export default function RecordingSection({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function stopAndConvert() {
+    const recordedBlob = await stopRecording();
+    await convertToMidi(recordedBlob);
   }
 
   return (
@@ -193,9 +216,9 @@ export default function RecordingSection({
         <div className="flex justify-center gap-3">
           <button
             onClick={startRecording}
-            disabled={isRecording}
+            disabled={isRecording || busy}
             className={`px-6 py-3 rounded-lg font-semibold text-sm transition-colors ${
-              isRecording
+              isRecording || busy
                 ? "bg-primary/50 text-primary-foreground cursor-not-allowed"
                 : "bg-primary text-primary-foreground hover:bg-primary/90"
             }`}
@@ -203,26 +226,15 @@ export default function RecordingSection({
             Record
           </button>
           <button
-            onClick={stopRecording}
-            disabled={!isRecording}
+            onClick={stopAndConvert}
+            disabled={!isRecording || busy}
             className={`px-6 py-3 rounded-lg font-semibold text-sm transition-colors ${
-              !isRecording
+              !isRecording || busy
                 ? "bg-muted text-muted-foreground cursor-not-allowed"
                 : "bg-muted text-foreground hover:bg-muted/80"
             }`}
           >
-            Stop
-          </button>
-          <button
-            onClick={convertToMidi}
-            disabled={!audioBlob || busy}
-            className={`px-6 py-3 rounded-lg font-semibold text-sm border-2 transition-colors ${
-              !audioBlob || busy
-                ? "border-border text-muted-foreground cursor-not-allowed"
-                : "border-border text-foreground hover:bg-muted"
-            }`}
-          >
-            {busy ? "Converting..." : "Convert to MIDI"}
+            {busy ? "Converting..." : "Stop & Convert to MIDI"}
           </button>
         </div>
 
