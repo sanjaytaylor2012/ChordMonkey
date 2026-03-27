@@ -9,17 +9,9 @@ import ChordProgression, { SongSection } from "@/components/ChordProgression";
 import ParticlesBackground from "@/components/ParticlesBackground";
 import type {
   DisplayInstrument,
+  MidiAnalysis,
   RecommendationLevel,
 } from "@/lib/create-page-types";
-
-interface MidiAnalysisEvent {
-  symbol?: string;
-  pitch_classes?: string[];
-}
-
-interface MidiAnalysis {
-  events?: MidiAnalysisEvent[];
-}
 
 function createSection(sectionNumber: number, chords: string[] = []): SongSection {
   return {

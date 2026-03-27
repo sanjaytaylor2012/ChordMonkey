@@ -4,11 +4,12 @@ import React, { useRef, useState } from "react";
 import {url} from "@/lib/utils";
 import type {
   DisplayInstrument,
+  MidiAnalysis,
   RecommendationLevel,
 } from "@/lib/create-page-types";
 
 interface RecordingSectionProps {
-  onRecordingAnalyzed?: (analysis: unknown) => void;
+  onRecordingAnalyzed?: (analysis: MidiAnalysis) => void;
   displayInstrument: DisplayInstrument;
   recommendationLevel: RecommendationLevel;
   onDisplayInstrumentChange: (instrument: DisplayInstrument) => void;
