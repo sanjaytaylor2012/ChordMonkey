@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import {url} from "@/lib/utils";
+import { useChordPlayback } from "@/components/chord-progression/useChordPlayback";
+import { isPlayableChordSymbol } from "@/lib/chord-audio";
+import { url } from "@/lib/utils";
 
 
 const RECOMMENDATIONS_URL = `${url}/recommendations`
@@ -164,6 +166,7 @@ export default function ChordRecommendations({
   const [data, setData] = useState<ApiResp | null>(null);
   const [selectedKey, setSelectedKey] = useState<string>(AUTO_KEY);
   const previousAutoKeyRef = useRef<string | null>(null);
+  const { playChordPreview } = useChordPlayback();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -275,19 +278,33 @@ export default function ChordRecommendations({
                     {rec.reason}
                   </div>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAddChord(rec.chord);
-                  }}
-                  className={`w-8 h-8 rounded-md flex items-center justify-center text-lg font-bold transition-colors ${
-                    isLastAdded
-                      ? "bg-green-600 text-white"
-                      : "bg-primary text-primary-foreground hover:bg-primary/90"
-                  }`}
-                >
-                  {isLastAdded ? "✓" : "+"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void playChordPreview(rec.chord);
+                    }}
+                    disabled={!isPlayableChordSymbol(rec.chord)}
+                    className="h-8 rounded-md border border-border px-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Play
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddChord(rec.chord);
+                    }}
+                    className={`w-8 h-8 rounded-md flex items-center justify-center text-lg font-bold transition-colors ${
+                      isLastAdded
+                        ? "bg-green-600 text-white"
+                        : "bg-primary text-primary-foreground hover:bg-primary/90"
+                    }`}
+                  >
+                    {isLastAdded ? "✓" : "+"}
+                  </button>
+                </div>
               </div>
             );
           })}
