@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useChordPlayback } from "@/components/chord-progression/useChordPlayback";
 import { isPlayableChordSymbol } from "@/lib/chord-audio";
 import type { RecommendationLevel } from "@/lib/create-page-types";
@@ -194,8 +194,12 @@ export default function ChordRecommendations({
   const { playChordPreview } = useChordPlayback();
   const maxRecommendations = level === "advanced" ? 5 : 4;
   const progressionSignature = progression.join("|");
+  const requestProgression = useMemo(
+    () => (progressionSignature ? progressionSignature.split("|") : []),
+    [progressionSignature],
+  );
   const canFetchRecommendations =
-    progression.length > 0 || Boolean(currentChord);
+    requestProgression.length > 0 || Boolean(currentChord);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -204,8 +208,8 @@ export default function ChordRecommendations({
       try {
         const forcedKey = selectedKey === AUTO_KEY ? null : selectedKey;
         const payload = {
-          progression,
-          current_chord: progression.length === 0 ? currentChord : null,
+          progression: requestProgression,
+          current_chord: requestProgression.length === 0 ? currentChord : null,
           max_recs: maxRecommendations,
           level,
           forced_key: forcedKey,
@@ -238,7 +242,7 @@ export default function ChordRecommendations({
 
     return () => controller.abort();
   }, [
-    progressionSignature,
+    requestProgression,
     currentChord,
     selectedKey,
     level,
@@ -374,19 +378,6 @@ export default function ChordRecommendations({
                     {isLastAdded ? "✓" : "+"}
                   </button>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAddChord(rec.chord);
-                  }}
-                  className={`flex h-8 w-8 items-center justify-center rounded-md text-lg font-bold transition-colors ${
-                    isLastAdded
-                      ? "bg-green-600 text-white"
-                      : "bg-primary text-primary-foreground hover:bg-primary/90"
-                  }`}
-                >
-                  {isLastAdded ? "v" : "+"}
-                </button>
               </div>
             );
           })}
