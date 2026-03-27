@@ -3,10 +3,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useChordPlayback } from "@/components/chord-progression/useChordPlayback";
 import { isPlayableChordSymbol } from "@/lib/chord-audio";
+import type { RecommendationLevel } from "@/lib/create-page-types";
 import { url } from "@/lib/utils";
 
-
-const RECOMMENDATIONS_URL = `${url}/recommendations`
+const RECOMMENDATIONS_URL = `${url}/recommendations`;
 
 interface ApiRec {
   chord: string;
@@ -26,6 +26,8 @@ interface ChordRecommendationsProps {
   selectedChord: string | null;
   lastAddedChord: string | null;
   progression: string[];
+  level: RecommendationLevel;
+  onRefreshRecommendations?: () => void;
   onSelectChord: (chord: string) => void;
   onAddChord: (chord: string) => void;
 }
@@ -106,6 +108,28 @@ const FLAT_NOTES = [
   "B",
 ];
 
+function chordToPitchClasses(chordText: string): number[] {
+  const match = chordText.trim().match(/^([A-G][#b]?)(.*)$/);
+  if (!match) return [];
+
+  const [, root, suffix] = match;
+  const rootPc = NOTE_TO_PC[root];
+  if (rootPc === undefined) return [];
+
+  const normalizedSuffix = suffix.toLowerCase();
+  let intervals = [0, 4, 7];
+
+  if (normalizedSuffix.startsWith("dim")) {
+    intervals = [0, 3, 6];
+  } else if (normalizedSuffix.startsWith("aug")) {
+    intervals = [0, 4, 8];
+  } else if (normalizedSuffix.startsWith("m")) {
+    intervals = [0, 3, 7];
+  }
+
+  return intervals.map((interval) => (rootPc + interval) % 12);
+}
+
 function keyToScale(keyText: string): string[] | null {
   const [tonic, mode] = keyText.split(" ");
   const tonicPc = NOTE_TO_PC[tonic];
@@ -120,7 +144,7 @@ function keyToScale(keyText: string): string[] | null {
     tonic.includes("b") || ["F", "Bb", "Eb", "Ab", "Db", "Gb"].includes(tonic);
   const noteNames = useFlats ? FLAT_NOTES : SHARP_NOTES;
 
-  return intervals.map((i) => noteNames[(tonicPc + i) % 12]);
+  return intervals.map((interval) => noteNames[(tonicPc + interval) % 12]);
 }
 
 function romanToChordSymbol(
@@ -139,15 +163,13 @@ function romanToChordSymbol(
     vi: 5,
     vii: 6,
   };
-  const core = romanFigure
-    .replace("°", "")
-    .replace("o", "")
-    .replace(/[0-9]/g, "");
+  const core = romanFigure.replace(/[\u00B0o]/g, "").replace(/[0-9]/g, "");
   const degree = degreeMap[core.toLowerCase()];
   if (degree === undefined) return null;
 
   const root = scale[degree];
-  const isDiminished = romanFigure.includes("°") || romanFigure.includes("o");
+  const isDiminished =
+    romanFigure.includes("\u00B0") || romanFigure.includes("o");
   const isMinor = core === core.toLowerCase();
 
   if (isDiminished) return `${root}dim`;
@@ -160,13 +182,20 @@ export default function ChordRecommendations({
   selectedChord,
   lastAddedChord,
   progression,
+  level,
+  onRefreshRecommendations,
   onSelectChord,
   onAddChord,
 }: ChordRecommendationsProps) {
   const [data, setData] = useState<ApiResp | null>(null);
   const [selectedKey, setSelectedKey] = useState<string>(AUTO_KEY);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const previousAutoKeyRef = useRef<string | null>(null);
   const { playChordPreview } = useChordPlayback();
+  const maxRecommendations = level === "advanced" ? 5 : 4;
+  const progressionSignature = progression.join("|");
+  const canFetchRecommendations =
+    progression.length > 0 || Boolean(currentChord);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -177,46 +206,61 @@ export default function ChordRecommendations({
         const payload = {
           progression,
           current_chord: progression.length === 0 ? currentChord : null,
-          max_recs: 4,
+          max_recs: maxRecommendations,
+          level,
           forced_key: forcedKey,
           previous_key:
             selectedKey === AUTO_KEY ? previousAutoKeyRef.current : null,
         };
-        console.log("[ChordRecommendations] request payload", payload);
-        const resp = await fetch(
-            RECOMMENDATIONS_URL,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            signal: controller.signal,
-            body: JSON.stringify(payload),
-          },
-        );
+        const resp = await fetch(RECOMMENDATIONS_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify(payload),
+        });
         if (!resp.ok) return;
+
         const apiData: ApiResp = await resp.json();
-        console.log("[ChordRecommendations] response payload", apiData);
         setData(apiData);
         if (selectedKey === AUTO_KEY && apiData.key_guess) {
           previousAutoKeyRef.current = apiData.key_guess;
         }
       } catch (err) {
         if ((err as Error).name === "AbortError") return;
-        // ignore for now
       }
     }
 
-    // Only fetch when we have something meaningful
-    if ((progression?.length ?? 0) > 0 || currentChord) run();
-    else previousAutoKeyRef.current = null;
+    if (canFetchRecommendations) {
+      run();
+    } else {
+      previousAutoKeyRef.current = null;
+    }
+
     return () => controller.abort();
-  }, [progression, currentChord, selectedKey]);
+  }, [
+    progressionSignature,
+    currentChord,
+    selectedKey,
+    level,
+    maxRecommendations,
+    refreshNonce,
+    canFetchRecommendations,
+  ]);
 
   const detectedKey = data?.key_guess ?? "Unknown";
   const activeKey = selectedKey === AUTO_KEY ? detectedKey : selectedKey;
+  const activeScale = keyToScale(activeKey);
+  const activeScalePitchClasses = new Set(
+    (activeScale ?? [])
+      .map((note) => NOTE_TO_PC[note])
+      .filter((pc): pc is number => pc !== undefined),
+  );
   const recommendations = (data?.recommendations ?? []).map((rec) => {
     if (selectedKey === AUTO_KEY) return rec;
+
     const transformed = romanToChordSymbol(rec.roman, selectedKey);
     if (!transformed) return rec;
+
     return {
       ...rec,
       chord: transformed,
@@ -226,21 +270,36 @@ export default function ChordRecommendations({
 
   return (
     <div className="flex flex-col">
-      <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">
+      <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
         Suggested Next Chords
       </h2>
-      <div className="bg-card border border-border rounded-xl p-6">
-        <div className="mb-4 p-3 rounded-lg border border-border bg-background">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="rounded-xl border border-border bg-card p-6">
+        <div className="mb-4 rounded-lg border border-border bg-background p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm text-muted-foreground">
               Active Key:{" "}
-              <span className="text-foreground font-semibold">{activeKey}</span>
+              <span className="font-semibold text-foreground">{activeKey}</span>
             </span>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onRefreshRecommendations?.();
+                  setRefreshNonce((value) => value + 1);
+                }}
+                disabled={!canFetchRecommendations}
+                className={`rounded-md border px-3 py-1 text-sm transition-colors ${
+                  canFetchRecommendations
+                    ? "border-border bg-muted text-foreground hover:bg-muted/80"
+                    : "cursor-not-allowed border-border bg-muted text-muted-foreground"
+                }`}
+              >
+                Refresh recommendations
+              </button>
               <select
                 value={selectedKey}
                 onChange={(e) => setSelectedKey(e.target.value)}
-                className="text-sm bg-muted border border-border rounded-md px-2 py-1"
+                className="rounded-md border border-border bg-muted px-2 py-1 text-sm"
               >
                 <option value={AUTO_KEY}>Auto Detect</option>
                 {KEY_OPTIONS.map((key) => (
@@ -252,23 +311,33 @@ export default function ChordRecommendations({
             </div>
           </div>
         </div>
-        <p className="text-sm text-muted-foreground mb-4">
-          Based on music theory and your progression
+        <p className="mb-4 text-sm text-muted-foreground">
+          {level === "advanced"
+            ? "Advanced mode includes stronger tension and more colorful harmonic moves."
+            : "Beginner mode keeps suggestions inside basic diatonic harmony."}
         </p>
         <div className="flex flex-col gap-3">
           {recommendations.map((rec) => {
             const isSelected = selectedChord === rec.chord;
             const isLastAdded = lastAddedChord === rec.chord;
+            const chordPitchClasses = chordToPitchClasses(rec.chord);
+            const isNonDiatonic =
+              level === "advanced" &&
+              activeScalePitchClasses.size > 0 &&
+              chordPitchClasses.some((pc) => !activeScalePitchClasses.has(pc));
 
             return (
               <div
                 key={rec.chord}
                 onClick={() => onSelectChord(rec.chord)}
-                className={`flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-colors ${
-                  isSelected
-                    ? "bg-primary/10 border-primary"
-                    : "bg-background border-border hover:bg-muted"
-                }`}
+                className={`flex cursor-pointer items-center justify-between rounded-lg border p-4 transition-colors ${
+                  isNonDiatonic
+                    ? "border-yellow-400 bg-yellow-500/5"
+                    : "border-border bg-background"
+                } ${isSelected ? "bg-primary/10" : "hover:bg-muted"}`}
+                title={
+                  isNonDiatonic ? "Non-diatonic recommendation" : undefined
+                }
               >
                 <div>
                   <div className="text-lg font-semibold text-foreground">
@@ -305,6 +374,19 @@ export default function ChordRecommendations({
                     {isLastAdded ? "✓" : "+"}
                   </button>
                 </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddChord(rec.chord);
+                  }}
+                  className={`flex h-8 w-8 items-center justify-center rounded-md text-lg font-bold transition-colors ${
+                    isLastAdded
+                      ? "bg-green-600 text-white"
+                      : "bg-primary text-primary-foreground hover:bg-primary/90"
+                  }`}
+                >
+                  {isLastAdded ? "v" : "+"}
+                </button>
               </div>
             );
           })}

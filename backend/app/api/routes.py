@@ -75,6 +75,7 @@ class RecommendRequest(BaseModel):
     progression: List[str]
     current_chord: str | None = None
     max_recs: int = 6
+    level: str = "beginner"
     forced_key: str | None = None
     previous_key: str | None = None
 
@@ -91,6 +92,7 @@ async def recommendations(req: RecommendRequest):
         progression=req.progression,
         current_chord=req.current_chord,
         max_recs=req.max_recs,
+        level=req.level,
         forced_key=req.forced_key,
         previous_key=req.previous_key,
     )

@@ -2,13 +2,26 @@
 
 import React, { useRef, useState } from "react";
 import {url} from "@/lib/utils";
+import type {
+  DisplayInstrument,
+  MidiAnalysis,
+  RecommendationLevel,
+} from "@/lib/create-page-types";
 
 interface RecordingSectionProps {
-  onRecordingAnalyzed?: (analysis: unknown) => void;
+  onRecordingAnalyzed?: (analysis: MidiAnalysis) => void;
+  displayInstrument: DisplayInstrument;
+  recommendationLevel: RecommendationLevel;
+  onDisplayInstrumentChange: (instrument: DisplayInstrument) => void;
+  onRecommendationLevelChange: (level: RecommendationLevel) => void;
 }
 
 export default function RecordingSection({
   onRecordingAnalyzed,
+  displayInstrument,
+  recommendationLevel,
+  onDisplayInstrumentChange,
+  onRecommendationLevelChange,
 }: RecordingSectionProps) {
 
   const TRANSCRIBE_URL =
@@ -52,24 +65,42 @@ export default function RecordingSection({
 
       mr.start();
       setIsRecording(true);
-    } catch (err) {
+    } catch {
       setError("Could not access microphone");
     }
   }
 
   function stopRecording() {
-    mediaRecorderRef.current?.stop();
-    setIsRecording(false);
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") {
+      return Promise.resolve<Blob | null>(audioBlob);
+    }
+
+    return new Promise<Blob | null>((resolve) => {
+      const originalOnStop = recorder.onstop;
+
+      recorder.onstop = () => {
+        originalOnStop?.call(recorder, new Event("stop"));
+        const recordedBlob = new Blob(chunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        resolve(recordedBlob);
+      };
+
+      recorder.stop();
+      setIsRecording(false);
+    });
   }
 
-  async function convertToMidi() {
-    if (!audioBlob) return;
+  async function convertToMidi(blobOverride?: Blob | null) {
+    const blobToConvert = blobOverride ?? audioBlob;
+    if (!blobToConvert) return;
     setBusy(true);
     setError(null);
 
     try {
-      const file = new File([audioBlob], "recording.webm", {
-        type: audioBlob.type || "audio/webm",
+      const file = new File([blobToConvert], "recording.webm", {
+        type: blobToConvert.type || "audio/webm",
       });
       const form = new FormData();
       form.append("file", file);
@@ -92,18 +123,77 @@ export default function RecordingSection({
       if (onRecordingAnalyzed) {
         onRecordingAnalyzed(analysis);
       }
-    } catch (e: any) {
-      setError(e?.message ?? "Conversion failed");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Conversion failed";
+      setError(message);
     } finally {
       setBusy(false);
     }
   }
 
+  async function stopAndConvert() {
+    const recordedBlob = await stopRecording();
+    await convertToMidi(recordedBlob);
+  }
+
   return (
     <div className="flex flex-col">
-      <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">
-        Recording
-      </h2>
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          Recording
+        </h2>
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center rounded-lg border border-border bg-card p-1">
+            <button
+              type="button"
+              onClick={() => onDisplayInstrumentChange("guitar")}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                displayInstrument === "guitar"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              Guitar
+            </button>
+            <button
+              type="button"
+              onClick={() => onDisplayInstrumentChange("keyboard")}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                displayInstrument === "keyboard"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              Keyboard
+            </button>
+          </div>
+          <div className="flex items-center rounded-lg border border-border bg-card p-1">
+            <button
+              type="button"
+              onClick={() => onRecommendationLevelChange("beginner")}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                recommendationLevel === "beginner"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              Beginner
+            </button>
+            <button
+              type="button"
+              onClick={() => onRecommendationLevelChange("advanced")}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                recommendationLevel === "advanced"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              Advanced
+            </button>
+          </div>
+        </div>
+      </div>
       <div className="bg-card border border-border rounded-xl p-6">
         {/* Waveform Placeholder */}
         <div className="bg-muted h-16 rounded-lg mb-5 flex items-center justify-center">
@@ -127,9 +217,9 @@ export default function RecordingSection({
         <div className="flex justify-center gap-3">
           <button
             onClick={startRecording}
-            disabled={isRecording}
+            disabled={isRecording || busy}
             className={`px-6 py-3 rounded-lg font-semibold text-sm transition-colors ${
-              isRecording
+              isRecording || busy
                 ? "bg-primary/50 text-primary-foreground cursor-not-allowed"
                 : "bg-primary text-primary-foreground hover:bg-primary/90"
             }`}
@@ -137,26 +227,15 @@ export default function RecordingSection({
             Record
           </button>
           <button
-            onClick={stopRecording}
-            disabled={!isRecording}
+            onClick={stopAndConvert}
+            disabled={!isRecording || busy}
             className={`px-6 py-3 rounded-lg font-semibold text-sm transition-colors ${
-              !isRecording
+              !isRecording || busy
                 ? "bg-muted text-muted-foreground cursor-not-allowed"
                 : "bg-muted text-foreground hover:bg-muted/80"
             }`}
           >
-            Stop
-          </button>
-          <button
-            onClick={convertToMidi}
-            disabled={!audioBlob || busy}
-            className={`px-6 py-3 rounded-lg font-semibold text-sm border-2 transition-colors ${
-              !audioBlob || busy
-                ? "border-border text-muted-foreground cursor-not-allowed"
-                : "border-border text-foreground hover:bg-muted"
-            }`}
-          >
-            {busy ? "Converting..." : "Convert to MIDI"}
+            {busy ? "Converting..." : "Stop & Convert to MIDI"}
           </button>
         </div>
 

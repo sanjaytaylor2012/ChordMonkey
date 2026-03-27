@@ -1,18 +1,127 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { SectionBlock } from "@/components/chord-progression/SectionBlock";
 import { useChordPlayback } from "@/components/chord-progression/useChordPlayback";
 import { Button } from "@/components/ui/button";
-import type { ChordProgressionProps } from "@/components/chord-progression/types";
 
-export type { SongSection } from "@/components/chord-progression/types";
+export interface SongSection {
+  id: string;
+  title: string;
+  chords: string[];
+}
+
+interface ChordProgressionProps {
+  sections: SongSection[];
+  currentSectionIndex: number | null;
+  currentChordIndex: number | null;
+  onClear: () => void;
+  onSelectChord: (
+    sectionIndex: number,
+    chordIndex: number,
+    chord: string,
+  ) => void;
+  onAddChord: (sectionIndex: number, chord: string) => void;
+  onRemoveChord: (sectionIndex: number, chordIndex: number) => void;
+  onAddSection: () => void;
+  onRenameSection: (sectionIndex: number, title: string) => void;
+}
+
+const CHORD_ROOTS = [
+  "C",
+  "C#",
+  "D",
+  "Eb",
+  "E",
+  "F",
+  "F#",
+  "G",
+  "Ab",
+  "A",
+  "Bb",
+  "B",
+];
+const CHORD_QUALITIES = [
+  { label: "Major", suffix: "" },
+  { label: "Minor", suffix: "m" },
+  { label: "Dim", suffix: "dim" },
+];
+
+function PencilIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className={className}
+    >
+      <path d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
+    </svg>
+  );
+}
+
+function SectionEditor({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (value: string) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  function commit(nextValue: string) {
+    const normalized = nextValue.trim() || value;
+    onCommit(normalized);
+    setDraft(normalized);
+    setIsEditing(false);
+  }
+
+  if (isEditing) {
+    return (
+      <input
+        type="text"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => commit(draft)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            commit(draft);
+          }
+          if (e.key === "Escape") {
+            setDraft(value);
+            setIsEditing(false);
+          }
+        }}
+        autoFocus
+        className="text-base font-normal text-muted-foreground bg-transparent border-b border-primary outline-none px-1"
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setIsEditing(true)}
+      className="flex items-center gap-2 text-base font-normal text-muted-foreground cursor-pointer hover:text-primary transition-colors group"
+      title="Click to edit"
+    >
+      {value}
+      <PencilIcon className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+    </button>
+  );
+}
 
 export default function ChordProgression({
   sections,
   currentSectionIndex,
   currentChordIndex,
   onClear,
+  onSelectChord,
   onAddChord,
   onRemoveChord,
   onAddSection,
@@ -20,7 +129,9 @@ export default function ChordProgression({
 }: ChordProgressionProps) {
   const [songTitle, setSongTitle] = useState("Untitled Song");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [openAddMenuSection, setOpenAddMenuSection] = useState<number | null>(null);
+  const [openAddMenuSection, setOpenAddMenuSection] = useState<number | null>(
+    null,
+  );
   const {
     hasPlayableChords,
     isPlaying,

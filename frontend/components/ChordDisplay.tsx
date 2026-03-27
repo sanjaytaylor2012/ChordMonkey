@@ -2,7 +2,8 @@
 
 import React from "react";
 import GuitarDiagram from "./GuitarDiagram";
-import { url } from "@/lib/utils";
+import KeyboardDiagram from "./KeyboardDiagram";
+import type { DisplayInstrument } from "@/lib/create-page-types";
 
 const CHORD_NAMES: Record<string, string> = {
   C: "C Major",
@@ -24,12 +25,14 @@ interface ChordDisplayProps {
   chord: string | null;
   label?: string;
   onAddChord?: (chord: string) => void;
+  instrument?: DisplayInstrument;
 }
 
 export default function ChordDisplay({
   chord,
   label = "Detected Chord",
   onAddChord,
+  instrument = "guitar",
 }: ChordDisplayProps) {
   return (
     <div className="flex flex-col h-full">
@@ -56,7 +59,11 @@ export default function ChordDisplay({
               {CHORD_NAMES[chord] || chord}
             </div>
             <div className="flex justify-center">
-              <GuitarDiagram chord={chord} />
+              {instrument === "keyboard" ? (
+                <KeyboardDiagram chord={chord} />
+              ) : (
+                <GuitarDiagram chord={chord} />
+              )}
             </div>
           </>
         ) : (
