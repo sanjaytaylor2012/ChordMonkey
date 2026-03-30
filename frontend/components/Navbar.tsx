@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "./ThemeProvider";
+import { useAuth } from "./AuthProvider";
+import { signOut } from "@/lib/auth";
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -110,13 +112,15 @@ function CloseIcon({ className }: { className?: string }) {
 
 export function Navbar() {
   const { theme, toggleTheme } = useTheme();
+  const { user, loading } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navLinks = [
     { href: "/welcome", label: "Home" },
     { href: "/", label: "Create" },
-    { href: "/my-songs", label: "My Songs" },
+    ...(user ? [{ href: "/my-songs", label: "My Songs" }] : []),
     { href: "/discover", label: "Discover" },
   ];
 
@@ -128,6 +132,14 @@ export function Navbar() {
   function closeMobileMenu() {
     setMobileMenuOpen(false);
   }
+
+  async function handleSignOut() {
+    await signOut();
+    closeMobileMenu();
+    router.push("/welcome");
+  }
+
+  const avatarUrl = user?.user_metadata?.avatar_url;
 
   return (
     <header className="w-full border-b bg-background/80 backdrop-blur-md sticky top-0 z-50">
@@ -160,22 +172,33 @@ export function Navbar() {
             </NavigationMenuList>
           </NavigationMenu>
 
-          {/* Auth Links */}
-          <div className="flex items-center gap-4">
-            {authLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`text-sm font-medium transition-colors ${
-                  pathname === link.href
-                    ? "text-foreground underline underline-offset-4"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </div>
+          {/* Auth Links or Sign Out */}
+          {!loading && (
+            <div className="flex items-center gap-4">
+              {user ? (
+                <button
+                  onClick={handleSignOut}
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Sign Out
+                </button>
+              ) : (
+                authLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={`text-sm font-medium transition-colors ${
+                      pathname === link.href
+                        ? "text-foreground underline underline-offset-4"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                ))
+              )}
+            </div>
+          )}
 
           {/* Theme Toggle Button */}
           <button
@@ -193,14 +216,30 @@ export function Navbar() {
           {/* Account Button */}
           <Link
             href="/account"
-            className={`p-2 rounded-lg transition-colors ${
+            className={`rounded-lg transition-colors overflow-hidden ${
               pathname === "/account"
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted hover:bg-muted/80"
+                ? "ring-2 ring-primary"
+                : ""
             }`}
             aria-label="Account"
           >
-            <UserIcon className="w-5 h-5" />
+            {user && avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt="Profile"
+                className="w-9 h-9 rounded-lg object-cover"
+              />
+            ) : (
+              <div
+                className={`p-2 rounded-lg transition-colors ${
+                  pathname === "/account"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted hover:bg-muted/80"
+                }`}
+              >
+                <UserIcon className="w-5 h-5" />
+              </div>
+            )}
           </Link>
         </div>
 
@@ -254,20 +293,31 @@ export function Navbar() {
 
             <div className="border-t border-border my-2" />
 
-            {authLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={closeMobileMenu}
-                className={`px-4 py-3 rounded-lg text-base font-medium transition-colors ${
-                  pathname === link.href
-                    ? "bg-primary/10 text-primary"
-                    : "text-foreground hover:bg-muted"
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
+            {!loading && (
+              user ? (
+                <button
+                  onClick={handleSignOut}
+                  className="px-4 py-3 rounded-lg text-base font-medium text-foreground hover:bg-muted transition-colors text-left"
+                >
+                  Sign Out
+                </button>
+              ) : (
+                authLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={closeMobileMenu}
+                    className={`px-4 py-3 rounded-lg text-base font-medium transition-colors ${
+                      pathname === link.href
+                        ? "bg-primary/10 text-primary"
+                        : "text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                ))
+              )
+            )}
 
             <div className="border-t border-border my-2" />
 
@@ -280,7 +330,15 @@ export function Navbar() {
                   : "text-foreground hover:bg-muted"
               }`}
             >
-              <UserIcon className="w-5 h-5" />
+              {user && avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt="Profile"
+                  className="w-6 h-6 rounded-full object-cover"
+                />
+              ) : (
+                <UserIcon className="w-5 h-5" />
+              )}
               Account
             </Link>
           </nav>

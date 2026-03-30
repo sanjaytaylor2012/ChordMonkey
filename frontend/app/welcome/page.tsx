@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import ParticlesBackground from "@/components/ParticlesBackground";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function Welcome() {
+  const { user, loading } = useAuth();
+
   return (
     <>
       <Navbar />
@@ -26,20 +29,41 @@ export default function Welcome() {
               </p>
               
               {/* CTA Buttons */}
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link
-                  href="/signup"
-                  className="w-full sm:w-auto px-8 py-4 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all hover:scale-105 hover:shadow-lg"
-                >
-                  Get started free
-                </Link>
-                <Link
-                  href="/login"
-                  className="w-full sm:w-auto px-8 py-4 rounded-lg bg-background border border-border text-foreground font-semibold hover:bg-muted transition-all"
-                >
-                  Login
-                </Link>
-              </div>
+              {!loading && (
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                  {user ? (
+                    <>
+                      <Link
+                        href="/"
+                        className="w-full sm:w-auto px-8 py-4 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all hover:scale-105 hover:shadow-lg"
+                      >
+                        Start creating
+                      </Link>
+                      <Link
+                        href="/my-songs"
+                        className="w-full sm:w-auto px-8 py-4 rounded-lg bg-background border border-border text-foreground font-semibold hover:bg-muted transition-all"
+                      >
+                        My Songs
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <Link
+                        href="/signup"
+                        className="w-full sm:w-auto px-8 py-4 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all hover:scale-105 hover:shadow-lg"
+                      >
+                        Get started free
+                      </Link>
+                      <Link
+                        href="/login"
+                        className="w-full sm:w-auto px-8 py-4 rounded-lg bg-background border border-border text-foreground font-semibold hover:bg-muted transition-all"
+                      >
+                        Login
+                      </Link>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </section>
 
@@ -167,12 +191,23 @@ export default function Welcome() {
               <p className="text-muted-foreground mb-8">
                 Join thousands of musicians using ChordMonkey to create amazing music.
               </p>
-              <Link
-                href="/signup"
-                className="inline-block px-8 py-4 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all hover:scale-105 hover:shadow-lg"
-              >
-                Create your free account
-              </Link>
+              {!loading && (
+                user ? (
+                  <Link
+                    href="/"
+                    className="inline-block px-8 py-4 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all hover:scale-105 hover:shadow-lg"
+                  >
+                    Start creating
+                  </Link>
+                ) : (
+                  <Link
+                    href="/signup"
+                    className="inline-block px-8 py-4 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all hover:scale-105 hover:shadow-lg"
+                  >
+                    Create your free account
+                  </Link>
+                )
+              )}
             </div>
           </section>
 

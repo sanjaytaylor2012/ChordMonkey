@@ -1,60 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Navbar } from "@/components/Navbar";
 import ParticlesBackground from "@/components/ParticlesBackground";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/components/AuthProvider";
 
-// Placeholder data 
-const PLACEHOLDER_SONGS = [
-  {
-    id: 1,
-    title: "Summer Vibes",
-    author: "Alex Chen",
-    chords: ["C", "G", "Am", "F"],
-    likes: 24,
-    createdAt: "2 days ago",
-  },
-  {
-    id: 2,
-    title: "Midnight Blues",
-    author: "Sarah Kim",
-    chords: ["Em", "Am", "D", "G"],
-    likes: 42,
-    createdAt: "3 days ago",
-  },
-  {
-    id: 3,
-    title: "Coffee Shop",
-    author: "Mike Johnson",
-    chords: ["D", "A", "Bm", "G"],
-    likes: 18,
-    createdAt: "5 days ago",
-  },
-  {
-    id: 4,
-    title: "Rainy Day",
-    author: "Emma Wilson",
-    chords: ["Am", "F", "C", "G"],
-    likes: 31,
-    createdAt: "1 week ago",
-  },
-  {
-    id: 5,
-    title: "Sunset Drive",
-    author: "Chris Lee",
-    chords: ["G", "D", "Em", "C"],
-    likes: 56,
-    createdAt: "1 week ago",
-  },
-  {
-    id: 6,
-    title: "City Lights",
-    author: "Jordan Taylor",
-    chords: ["F", "Am", "G", "C"],
-    likes: 29,
-    createdAt: "2 weeks ago",
-  },
-];
+interface Song {
+  id: string;
+  title: string;
+  sections: { id: string; title: string; chords: string[] }[];
+  created_at: string;
+  user_id: string;
+  profiles: {
+    name: string;
+  }[] | null;
+}
 
 function HeartIcon({ className, filled }: { className?: string; filled?: boolean }) {
   return (
@@ -91,32 +52,106 @@ function SearchIcon({ className }: { className?: string }) {
   );
 }
 
-export default function Discover() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [likedSongs, setLikedSongs] = useState<number[]>([]);
-  const [sortBy, setSortBy] = useState<"recent" | "popular">("recent");
+function formatDate(dateString: string) {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  function toggleLike(songId: number) {
-    setLikedSongs((prev) =>
-      prev.includes(songId)
-        ? prev.filter((id) => id !== songId)
-        : [...prev, songId]
-    );
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return date.toLocaleDateString();
+}
+
+export default function Discover() {
+  const { user } = useAuth();
+  const [songs, setSongs] = useState<Song[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"recent" | "popular">("recent");
+  const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set());
+
+  // Fetch all songs
+  useEffect(() => {
+    async function fetchSongs() {
+      const { data, error } = await supabase
+        .from("songs")
+        .select(`
+          id,
+          title,
+          sections,
+          created_at,
+          user_id,
+          profiles (
+            name
+          )
+        `)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching songs:", error);
+      } else {
+        setSongs(data || []);
+      }
+      setLoading(false);
+    }
+
+    fetchSongs();
+  }, []);
+
+  // Get all chords from all sections
+  function getAllChords(song: Song): string[] {
+    if (!song.sections || !Array.isArray(song.sections)) return [];
+    return song.sections.flatMap((section) => section.chords || []);
   }
 
-  const filteredSongs = PLACEHOLDER_SONGS.filter(
-    (song) =>
-      song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      song.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      song.chords.some((chord) =>
-        chord.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-  ).sort((a, b) => {
-    if (sortBy === "popular") {
-      return b.likes - a.likes;
-    }
-    return 0; 
+  // Filter songs based on search
+  const filteredSongs = songs.filter((song) => {
+    const searchLower = search.toLowerCase();
+    const chords = getAllChords(song);
+    const authorName = song.profiles?.[0]?.name || "Anonymous";
+    
+    return (
+      song.title.toLowerCase().includes(searchLower) ||
+      authorName.toLowerCase().includes(searchLower) ||
+      chords.some((chord) => chord.toLowerCase().includes(searchLower))
+    );
   });
+
+  // Sort songs
+  const sortedSongs = [...filteredSongs].sort((a, b) => {
+    if (sortBy === "recent") {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
+    // For now, "popular" just shows liked songs first (local state only)
+    const aLiked = likedSongs.has(a.id) ? 1 : 0;
+    const bLiked = likedSongs.has(b.id) ? 1 : 0;
+    return bLiked - aLiked;
+  });
+
+  function toggleLike(songId: string) {
+    setLikedSongs((prev) => {
+      const next = new Set(prev);
+      if (next.has(songId)) {
+        next.delete(songId);
+      } else {
+        next.add(songId);
+      }
+      return next;
+    });
+  }
+
+  if (loading) {
+    return (
+      <>
+        <Navbar />
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="text-muted-foreground">Loading...</div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -128,42 +163,42 @@ export default function Discover() {
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-foreground mb-2">
-              Discover Songs
+              Discover
             </h1>
             <p className="text-muted-foreground">
-              Explore chord progressions created by the community
+              Explore chord progressions from the community
             </p>
           </div>
 
           {/* Search and Filter */}
           <div className="flex flex-col sm:flex-row gap-4 mb-8">
             <div className="relative flex-1">
-              <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="Search by title, author, or chord..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 rounded-lg bg-card border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex rounded-lg border border-border bg-card p-1">
               <button
                 onClick={() => setSortBy("recent")}
-                className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   sortBy === "recent"
                     ? "bg-primary text-primary-foreground"
-                    : "bg-card border border-border text-muted-foreground hover:text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Recent
               </button>
               <button
                 onClick={() => setSortBy("popular")}
-                className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   sortBy === "popular"
                     ? "bg-primary text-primary-foreground"
-                    : "bg-card border border-border text-muted-foreground hover:text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Popular
@@ -172,61 +207,76 @@ export default function Discover() {
           </div>
 
           {/* Songs Grid */}
-          {filteredSongs.length > 0 ? (
+          {sortedSongs.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredSongs.map((song) => (
-                <div
-                  key={song.id}
-                  className="bg-card border border-border rounded-xl p-5 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/5 hover:border-primary/50 transition-colors cursor-pointer"
-                >
-                  {/* Song Header */}
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h3 className="text-lg font-semibold text-foreground mb-1">
-                        {song.title}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        by {song.author} • {song.createdAt}
-                      </p>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleLike(song.id);
-                      }}
-                      className="flex items-center gap-1 text-sm text-muted-foreground hover:text-red-500 transition-colors"
-                    >
-                      <HeartIcon
-                        className={`w-5 h-5 ${
-                          likedSongs.includes(song.id) ? "text-red-500" : ""
-                        }`}
-                        filled={likedSongs.includes(song.id)}
-                      />
-                      <span>
-                        {song.likes + (likedSongs.includes(song.id) ? 1 : 0)}
-                      </span>
-                    </button>
-                  </div>
+              {sortedSongs.map((song) => {
+                const chords = getAllChords(song);
+                const isLiked = likedSongs.has(song.id);
+                const authorName = song.profiles?.[0]?.name || "Anonymous";
 
-                  {/* Chord Progression */}
-                  <div className="flex flex-wrap gap-2">
-                    {song.chords.map((chord, index) => (
-                      <span
-                        key={index}
-                        className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-sm font-medium"
+                return (
+                  <div
+                    key={song.id}
+                    className="bg-card border border-border rounded-xl p-5 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/5"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-foreground">
+                          {song.title}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          by {authorName} • {formatDate(song.created_at)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => toggleLike(song.id)}
+                        className={`p-2 rounded-lg transition-colors ${
+                          isLiked
+                            ? "text-red-500 bg-red-500/10"
+                            : "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                        }`}
+                        aria-label={isLiked ? "Unlike" : "Like"}
                       >
-                        {chord}
-                      </span>
-                    ))}
+                        <HeartIcon className="w-5 h-5" filled={isLiked} />
+                      </button>
+                    </div>
+
+                    {/* Chords */}
+                    {chords.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {chords.slice(0, 8).map((chord, index) => (
+                          <span
+                            key={index}
+                            className="px-2 py-1 rounded-md bg-primary/10 text-primary text-sm font-medium"
+                          >
+                            {chord}
+                          </span>
+                        ))}
+                        {chords.length > 8 && (
+                          <span className="px-2 py-1 rounded-md bg-muted text-muted-foreground text-sm font-medium">
+                            +{chords.length - 8} more
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">
+                        No chords yet
+                      </p>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
-            <div className="text-center py-12">
-              <div className="text-4xl mb-4">🔍</div>
+            <div className="text-center py-16 bg-card border border-border rounded-xl">
+              <div className="text-5xl mb-4">🔍</div>
+              <h2 className="text-xl font-semibold text-foreground mb-2">
+                {search ? "No songs found" : "No songs yet"}
+              </h2>
               <p className="text-muted-foreground">
-                No songs found matching "{searchQuery}"
+                {search
+                  ? "Try a different search term"
+                  : "Be the first to share a chord progression!"}
               </p>
             </div>
           )}
