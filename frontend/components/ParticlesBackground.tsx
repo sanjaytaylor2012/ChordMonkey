@@ -18,7 +18,18 @@ export default function ParticlesBackground() {
   const animationRef = useRef<number>(0);
   const [isDark, setIsDark] = useState(true);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const transitionProgress = useRef(1);
+
+  useEffect(() => {
+    function checkMobile() {
+      setIsMobile(window.innerWidth < 768);
+    }
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Watch for theme changes
   useEffect(() => {
@@ -28,7 +39,7 @@ export default function ParticlesBackground() {
         setIsTransitioning(true);
         transitionProgress.current = 0;
         setIsDark(newIsDark);
-        
+
         // End transition after animation
         setTimeout(() => {
           setIsTransitioning(false);
@@ -53,6 +64,8 @@ export default function ParticlesBackground() {
   }, [isDark]);
 
   useEffect(() => {
+    if (isMobile) return;
+
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
@@ -129,18 +142,19 @@ export default function ParticlesBackground() {
       cancelAnimationFrame(animationRef.current);
       window.removeEventListener("resize", handleResize);
     };
-  }, [isDark, isTransitioning]);
+  }, [isDark, isTransitioning, isMobile]);
+
+  if (isMobile) {
+    return null;
+  }
 
   return (
-    <div 
-      ref={containerRef} 
+    <div
+      ref={containerRef}
       className="absolute inset-0 overflow-hidden pointer-events-none"
       style={{ zIndex: 0 }}
     >
-      <canvas
-        ref={canvasRef}
-        className="block w-full h-full"
-      />
+      <canvas ref={canvasRef} className="block w-full h-full" />
     </div>
   );
 }

@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import RecordingSection from "@/components/RecordingSection";
 import ChordDisplay from "@/components/ChordDisplay";
 import ChordRecommendations from "@/components/ChordRecommendations";
 import ChordProgression, { SongSection } from "@/components/ChordProgression";
 import ParticlesBackground from "@/components/ParticlesBackground";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/components/AuthProvider";
 import type {
   DisplayInstrument,
   MidiAnalysis,
@@ -22,6 +25,10 @@ function createSection(sectionNumber: number, chords: string[] = []): SongSectio
 }
 
 export default function Home() {
+  const searchParams = useSearchParams();
+  const songId = searchParams.get("song");
+  const { user } = useAuth();
+
   const [displayInstrument, setDisplayInstrument] =
     useState<DisplayInstrument>("guitar");
   const [recommendationLevel, setRecommendationLevel] =
@@ -44,6 +51,43 @@ export default function Home() {
   // Which chord in the progression is "active"
   const [currentSectionIndex, setCurrentSectionIndex] = useState<number | null>(0);
   const [currentChordIndex, setCurrentChordIndex] = useState<number | null>(2);
+
+  // Track loaded song info
+  const [loadedSongId, setLoadedSongId] = useState<string | null>(null);
+  const [loadedSongTitle, setLoadedSongTitle] = useState<string | null>(null);
+  const [loadingSong, setLoadingSong] = useState(false);
+
+  // Load song from URL parameter
+  useEffect(() => {
+    if (!songId || !user) return;
+
+    async function loadSong() {
+      setLoadingSong(true);
+
+      const { data, error } = await supabase
+        .from("songs")
+        .select("*")
+        .eq("id", songId)
+        .eq("user_id", user!.id)
+        .single();
+
+      if (error) {
+        console.error("Error loading song:", error);
+      } else if (data) {
+        setSections(data.sections || [createSection(1)]);
+        setLoadedSongId(data.id);
+        setLoadedSongTitle(data.title);
+        setCurrentSectionIndex(null);
+        setCurrentChordIndex(null);
+        setSelectedChord(null);
+        setLastAddedChord(null);
+      }
+
+      setLoadingSong(false);
+    }
+
+    loadSong();
+  }, [songId, user]);
 
   const progression = sections.flatMap((section) => section.chords);
 
@@ -123,11 +167,13 @@ export default function Home() {
 
   // Clear the progression
   function handleClear() {
-    setSections((prev) => prev.map((section) => ({ ...section, chords: [] })));
+    setSections([createSection(1)]);
     setCurrentSectionIndex(null);
     setCurrentChordIndex(null);
     setSelectedChord(null);
     setLastAddedChord(null);
+    setLoadedSongId(null);
+    setLoadedSongTitle(null);
   }
 
   function handleAddSection() {
@@ -179,6 +225,17 @@ export default function Home() {
   // The chord to display
   const displayChord = selectedChord ?? detectedChord;
 
+  if (loadingSong) {
+    return (
+      <>
+        <Navbar />
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="text-muted-foreground">Loading song...</div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <Navbar />
@@ -228,6 +285,8 @@ export default function Home() {
               onRemoveChord={handleRemoveChord}
               onAddSection={handleAddSection}
               onRenameSection={handleRenameSection}
+              loadedSongId={loadedSongId}
+              loadedSongTitle={loadedSongTitle}
             />
           </div>
         </div>

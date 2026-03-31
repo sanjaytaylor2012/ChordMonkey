@@ -4,6 +4,8 @@ import React, { useEffect, useState } from "react";
 import { SectionBlock } from "@/components/chord-progression/SectionBlock";
 import { useChordPlayback } from "@/components/chord-progression/useChordPlayback";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/AuthProvider";
+import { supabase } from "@/lib/supabase";
 
 export interface SongSection {
   id: string;
@@ -25,27 +27,9 @@ interface ChordProgressionProps {
   onRemoveChord: (sectionIndex: number, chordIndex: number) => void;
   onAddSection: () => void;
   onRenameSection: (sectionIndex: number, title: string) => void;
+  loadedSongId?: string | null;
+  loadedSongTitle?: string | null;
 }
-
-const CHORD_ROOTS = [
-  "C",
-  "C#",
-  "D",
-  "Eb",
-  "E",
-  "F",
-  "F#",
-  "G",
-  "Ab",
-  "A",
-  "Bb",
-  "B",
-];
-const CHORD_QUALITIES = [
-  { label: "Major", suffix: "" },
-  { label: "Minor", suffix: "m" },
-  { label: "Dim", suffix: "dim" },
-];
 
 function PencilIcon({ className }: { className?: string }) {
   return (
@@ -126,12 +110,20 @@ export default function ChordProgression({
   onRemoveChord,
   onAddSection,
   onRenameSection,
+  loadedSongId,
+  loadedSongTitle,
 }: ChordProgressionProps) {
+  const { user } = useAuth();
   const [songTitle, setSongTitle] = useState("Untitled Song");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [openAddMenuSection, setOpenAddMenuSection] = useState<number | null>(
-    null,
-  );
+  const [openAddMenuSection, setOpenAddMenuSection] = useState<number | null>(null);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveTitle, setSaveTitle] = useState("");
+  const [isPublic, setIsPublic] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
   const {
     hasPlayableChords,
     isPlaying,
@@ -140,6 +132,20 @@ export default function ChordProgression({
     playProgression,
     stopPlayback,
   } = useChordPlayback(sections);
+
+  // Set title when song is loaded
+  useEffect(() => {
+    if (loadedSongTitle) {
+      setSongTitle(loadedSongTitle);
+    }
+  }, [loadedSongTitle]);
+
+  // Reset title when starting fresh (no loaded song)
+  useEffect(() => {
+    if (!loadedSongId && !loadedSongTitle) {
+      setSongTitle("Untitled Song");
+    }
+  }, [loadedSongId, loadedSongTitle]);
 
   function handleTitleBlur() {
     setIsEditingTitle(false);
@@ -163,6 +169,67 @@ export default function ChordProgression({
   function handleClearClick() {
     stopPlayback();
     onClear();
+    setSongTitle("Untitled Song");
+  }
+
+  function handleSaveClick() {
+    if (!user) {
+      setSaveError("Please log in to save your song");
+      setShowSaveModal(true);
+      return;
+    }
+    setSaveTitle(songTitle);
+    setSaveError(null);
+    setSaveSuccess(false);
+    setShowSaveModal(true);
+  }
+
+  async function handleSaveConfirm() {
+    if (!user) return;
+
+    setSaving(true);
+    setSaveError(null);
+
+    let result;
+
+    if (loadedSongId) {
+      // Update existing song
+      result = await supabase
+        .from("songs")
+        .update({
+          title: saveTitle.trim() || "Untitled Song",
+          sections: sections,
+          is_public: isPublic,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", loadedSongId)
+        .select();
+    } else {
+      // Insert new song
+      result = await supabase
+        .from("songs")
+        .insert({
+          user_id: user.id,
+          title: saveTitle.trim() || "Untitled Song",
+          sections: sections,
+          is_public: isPublic,
+        })
+        .select();
+    }
+
+    const { data, error } = result;
+
+    console.log("Save response:", { data, error });
+
+    if (error) {
+      console.error("Error saving song:", error.message, error.details, error.hint);
+      setSaveError(error.message || "Failed to save song. Please try again.");
+      setSaving(false);
+    } else {
+      setSongTitle(saveTitle.trim() || "Untitled Song");
+      setSaveSuccess(true);
+      setSaving(false);
+    }
   }
 
   return (
@@ -183,17 +250,24 @@ export default function ChordProgression({
               className="text-base font-semibold text-foreground bg-transparent border-b border-primary outline-none px-1 w-full sm:w-auto"
             />
           ) : (
-            <button
-              type="button"
-              onClick={() => setIsEditingTitle(true)}
-              className="flex items-center gap-2 text-base font-semibold text-foreground cursor-pointer hover:text-primary transition-colors group"
-              title="Click to edit"
-            >
-              {songTitle}
-              <span className="text-sm text-muted-foreground group-hover:text-primary transition-colors">
-                Edit
-              </span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsEditingTitle(true)}
+                className="flex items-center gap-2 text-base font-semibold text-foreground cursor-pointer hover:text-primary transition-colors group"
+                title="Click to edit"
+              >
+                {songTitle}
+                <span className="text-sm text-muted-foreground group-hover:text-primary transition-colors">
+                  Edit
+                </span>
+              </button>
+              {loadedSongId && (
+                <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                  Editing saved song
+                </span>
+              )}
+            </div>
           )}
 
           <div className="flex gap-2">
@@ -212,8 +286,11 @@ export default function ChordProgression({
             >
               Clear
             </button>
-            <button className="px-4 py-2 text-sm bg-muted text-foreground rounded-md hover:bg-muted/80 transition-colors">
-              Export
+            <button
+              onClick={handleSaveClick}
+              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+            >
+              {loadedSongId ? "Update" : "Save"}
             </button>
           </div>
         </div>
@@ -246,6 +323,111 @@ export default function ChordProgression({
           </button>
         </div>
       </div>
+
+      {/* Save Modal */}
+      {showSaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md mx-4 shadow-lg">
+            {saveSuccess ? (
+              <div className="text-center py-4">
+                <div className="w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <svg
+                    className="w-6 h-6 text-green-500"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                </div>
+                <p className="text-foreground font-medium mb-4">
+                  {loadedSongId ? "Song updated!" : "Song saved!"}
+                </p>
+                <button
+                  onClick={() => {
+                    setShowSaveModal(false);
+                    setSaveSuccess(false);
+                  }}
+                  className="px-6 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+                >
+                  OK
+                </button>
+              </div>
+            ) : (
+              <>
+                <h3 className="text-lg font-semibold text-foreground mb-4">
+                  {loadedSongId ? "Update Song" : "Save Song"}
+                </h3>
+
+                {saveError && (
+                  <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm">
+                    {saveError}
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Song Title
+                    </label>
+                    <input
+                      type="text"
+                      value={saveTitle}
+                      onChange={(e) => setSaveTitle(e.target.value)}
+                      className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="Enter song title"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium text-foreground">
+                        Make Public
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Show in Discover for others to see
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setIsPublic(!isPublic)}
+                      className={`w-12 h-6 rounded-full transition-colors ${
+                        isPublic ? "bg-primary" : "bg-muted"
+                      }`}
+                    >
+                      <div
+                        className={`w-5 h-5 rounded-full bg-white shadow-sm transform transition-transform ${
+                          isPublic ? "translate-x-6" : "translate-x-0.5"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => setShowSaveModal(false)}
+                    className="flex-1 px-4 py-2 rounded-lg bg-muted text-foreground font-medium hover:bg-muted/80 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveConfirm}
+                    disabled={saving || !user}
+                    className="flex-1 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  >
+                    {saving ? "Saving..." : loadedSongId ? "Update" : "Save"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

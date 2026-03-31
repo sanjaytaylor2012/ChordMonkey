@@ -7,6 +7,7 @@ import { Navbar } from "@/components/Navbar";
 import ParticlesBackground from "@/components/ParticlesBackground";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/lib/supabase";
+import { useChordPlayback } from "@/components/chord-progression/useChordPlayback";
 
 interface Song {
   id: string;
@@ -14,6 +15,7 @@ interface Song {
   sections: { id: string; title: string; chords: string[] }[];
   created_at: string;
   updated_at: string;
+  is_public: boolean;
 }
 
 function PlusIcon({ className }: { className?: string }) {
@@ -55,7 +57,7 @@ function TrashIcon({ className }: { className?: string }) {
   );
 }
 
-function EditIcon({ className }: { className?: string }) {
+function PencilIcon({ className }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -73,16 +75,332 @@ function EditIcon({ className }: { className?: string }) {
   );
 }
 
+function PlayIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <polygon points="5 3 19 12 5 21 5 3" />
+    </svg>
+  );
+}
+
+function StopIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <rect x="6" y="6" width="12" height="12" />
+    </svg>
+  );
+}
+
+function GlobeIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+      <path d="M2 12h20" />
+    </svg>
+  );
+}
+
+function LockIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+
 function formatDate(dateString: string) {
   const date = new Date(dateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
+  const diffHours = diffMs / (1000 * 60 * 60);
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays} days ago`;
+  // Within last 24 hours - show time
+  if (diffHours < 24) {
+    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+
+  // Yesterday
+  if (diffDays === 1) {
+    return "Yesterday";
+  }
+
+  // Within last week
+  if (diffDays < 7) {
+    return `${diffDays} days ago`;
+  }
+
+  // Older - show date
   return date.toLocaleDateString();
+}
+
+function SongCard({
+  song,
+  isRenaming,
+  renameValue,
+  renaming,
+  deleteConfirm,
+  onStartRename,
+  onRenameChange,
+  onRenameSubmit,
+  onRenameCancel,
+  onDeleteClick,
+  onDeleteConfirm,
+  onDeleteCancel,
+  onTogglePublic,
+}: {
+  song: Song;
+  isRenaming: boolean;
+  renameValue: string;
+  renaming: boolean;
+  deleteConfirm: boolean;
+  onStartRename: () => void;
+  onRenameChange: (value: string) => void;
+  onRenameSubmit: () => void;
+  onRenameCancel: () => void;
+  onDeleteClick: () => void;
+  onDeleteConfirm: () => void;
+  onDeleteCancel: () => void;
+  onTogglePublic: () => void;
+}) {
+  const sections = song.sections || [];
+  const {
+    hasPlayableChords,
+    isPlaying,
+    playbackCursor,
+    playProgression,
+    stopPlayback,
+  } = useChordPlayback(sections);
+
+  // Get all chords with their section/chord indices for highlighting
+  function getChordsWithIndices(): {
+    chord: string;
+    sectionIndex: number;
+    chordIndex: number;
+  }[] {
+    if (!sections || !Array.isArray(sections)) return [];
+    const result: {
+      chord: string;
+      sectionIndex: number;
+      chordIndex: number;
+    }[] = [];
+    sections.forEach((section, sectionIndex) => {
+      (section.chords || []).forEach((chord, chordIndex) => {
+        result.push({ chord, sectionIndex, chordIndex });
+      });
+    });
+    return result;
+  }
+
+  const chordsWithIndices = getChordsWithIndices();
+
+  function isChordPlaying(sectionIndex: number, chordIndex: number): boolean {
+    return (
+      isPlaying &&
+      playbackCursor.sectionIndex === sectionIndex &&
+      playbackCursor.chordIndex === chordIndex
+    );
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/5">
+      <div className="flex items-start justify-between">
+        {/* Song Info */}
+        <div className="flex-1">
+          {isRenaming ? (
+            <div className="flex items-center gap-2 mb-1">
+              <input
+                type="text"
+                value={renameValue}
+                onChange={(e) => onRenameChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") onRenameSubmit();
+                  if (e.key === "Escape") onRenameCancel();
+                }}
+                autoFocus
+                className="text-lg font-semibold text-foreground bg-transparent border-b border-primary outline-none px-1"
+              />
+              <button
+                onClick={onRenameSubmit}
+                disabled={renaming}
+                className="px-3 py-1 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {renaming ? "..." : "Save"}
+              </button>
+              <button
+                onClick={onRenameCancel}
+                className="px-3 py-1 rounded-md bg-muted text-foreground text-sm font-medium hover:bg-muted/80 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-lg font-semibold text-foreground">
+                {song.title}
+              </h3>
+              <button
+                onClick={onStartRename}
+                className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Rename song"
+              >
+                <PencilIcon className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+          <div className="flex items-center gap-3 text-sm text-muted-foreground mb-4">
+            <span>
+              Created {formatDate(song.created_at)} • Updated{" "}
+              {formatDate(song.updated_at)}
+            </span>
+            <button
+              onClick={onTogglePublic}
+              className={`flex items-center gap-2 px-2.5 py-1 rounded-full border transition-all hover:scale-105 ${
+                song.is_public
+                  ? "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30 hover:bg-green-500/20"
+                  : "bg-muted text-muted-foreground border-border hover:bg-muted/80 hover:text-foreground"
+              }`}
+              title={song.is_public ? "Click to make private" : "Click to make public"}
+            >
+              {song.is_public ? (
+                <GlobeIcon className="w-3.5 h-3.5" />
+              ) : (
+                <LockIcon className="w-3.5 h-3.5" />
+              )}
+              <span className="text-xs font-medium">{song.is_public ? "Public" : "Private"}</span>
+              <div
+                className={`w-8 h-4 rounded-full relative transition-colors ${
+                  song.is_public ? "bg-green-500" : "bg-muted-foreground/30"
+                }`}
+              >
+                <div
+                  className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow-sm transition-transform ${
+                    song.is_public ? "translate-x-4" : "translate-x-0.5"
+                  }`}
+                />
+              </div>
+            </button>
+          </div>
+
+          {/* Chord Progression */}
+          {chordsWithIndices.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {chordsWithIndices.slice(0, 12).map((item, index) => {
+                const playing = isChordPlaying(
+                  item.sectionIndex,
+                  item.chordIndex
+                );
+                return (
+                  <span
+                    key={index}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                      playing
+                        ? "bg-primary text-primary-foreground scale-110 shadow-lg"
+                        : "bg-primary/10 text-primary"
+                    }`}
+                  >
+                    {item.chord}
+                  </span>
+                );
+              })}
+              {chordsWithIndices.length > 12 && (
+                <span className="px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-sm font-medium">
+                  +{chordsWithIndices.length - 12} more
+                </span>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">No chords yet</p>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 ml-4">
+          <button
+            onClick={isPlaying ? stopPlayback : playProgression}
+            disabled={!hasPlayableChords}
+            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label={isPlaying ? "Stop" : "Play"}
+          >
+            {isPlaying ? (
+              <StopIcon className="w-5 h-5" />
+            ) : (
+              <PlayIcon className="w-5 h-5" />
+            )}
+          </button>
+          <Link
+            href={`/?song=${song.id}`}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+            aria-label="Continue editing"
+          >
+            Edit Song
+          </Link>
+          {deleteConfirm ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onDeleteConfirm}
+                className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-colors"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={onDeleteCancel}
+                className="px-3 py-1.5 rounded-lg bg-muted text-foreground text-sm font-medium hover:bg-muted/80 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={onDeleteClick}
+              className="p-2 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
+              aria-label="Delete song"
+            >
+              <TrashIcon className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function MySongs() {
@@ -91,6 +409,9 @@ export default function MySongs() {
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [renamingSongId, setRenamingSongId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renaming, setRenaming] = useState(false);
 
   // Fetch songs
   useEffect(() => {
@@ -122,10 +443,7 @@ export default function MySongs() {
   }, [user, authLoading, router]);
 
   async function handleDelete(songId: string) {
-    const { error } = await supabase
-      .from("songs")
-      .delete()
-      .eq("id", songId);
+    const { error } = await supabase.from("songs").delete().eq("id", songId);
 
     if (error) {
       console.error("Error deleting song:", error);
@@ -135,10 +453,74 @@ export default function MySongs() {
     setDeleteConfirm(null);
   }
 
-  // Get all chords from all sections
-  function getAllChords(song: Song): string[] {
-    if (!song.sections || !Array.isArray(song.sections)) return [];
-    return song.sections.flatMap((section) => section.chords || []);
+  function startRename(song: Song) {
+    setRenamingSongId(song.id);
+    setRenameValue(song.title);
+  }
+
+  async function handleRename(songId: string) {
+    if (!renameValue.trim()) {
+      setRenamingSongId(null);
+      return;
+    }
+
+    setRenaming(true);
+
+    const { error } = await supabase
+      .from("songs")
+      .update({
+        title: renameValue.trim(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", songId);
+
+    if (error) {
+      console.error("Error renaming song:", error);
+    } else {
+      setSongs((prev) =>
+        prev.map((song) =>
+          song.id === songId
+            ? {
+                ...song,
+                title: renameValue.trim(),
+                updated_at: new Date().toISOString(),
+              }
+            : song
+        )
+      );
+    }
+
+    setRenaming(false);
+    setRenamingSongId(null);
+  }
+
+  async function handleTogglePublic(songId: string) {
+    const song = songs.find((s) => s.id === songId);
+    if (!song) return;
+
+    const newIsPublic = !song.is_public;
+
+    // Optimistically update UI
+    setSongs((prev) =>
+      prev.map((s) =>
+        s.id === songId ? { ...s, is_public: newIsPublic } : s
+      )
+    );
+
+    const { error } = await supabase
+      .from("songs")
+      .update({ is_public: newIsPublic })
+      .eq("id", songId);
+
+    if (error) {
+      console.error("Error toggling public:", error);
+      // Revert on error
+      setSongs((prev) =>
+        prev.map((s) =>
+          s.id === songId ? { ...s, is_public: !newIsPublic } : s
+        )
+      );
+    }
   }
 
   if (authLoading || loading) {
@@ -185,86 +567,24 @@ export default function MySongs() {
           {/* Songs List */}
           {songs.length > 0 ? (
             <div className="space-y-4">
-              {songs.map((song) => {
-                const chords = getAllChords(song);
-                return (
-                  <div
-                    key={song.id}
-                    className="bg-card border border-border rounded-xl p-5 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/5"
-                  >
-                    <div className="flex items-start justify-between">
-                      {/* Song Info */}
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-foreground mb-1">
-                          {song.title}
-                        </h3>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Created {formatDate(song.created_at)} • Updated{" "}
-                          {formatDate(song.updated_at)}
-                        </p>
-
-                        {/* Chord Progression */}
-                        {chords.length > 0 ? (
-                          <div className="flex flex-wrap gap-2">
-                            {chords.slice(0, 12).map((chord, index) => (
-                              <span
-                                key={index}
-                                className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-sm font-medium"
-                              >
-                                {chord}
-                              </span>
-                            ))}
-                            {chords.length > 12 && (
-                              <span className="px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-sm font-medium">
-                                +{chords.length - 12} more
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground italic">
-                            No chords yet
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-2 ml-4">
-                        <Link
-                          href={`/?song=${song.id}`}
-                          className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                          aria-label="Edit song"
-                        >
-                          <EditIcon className="w-5 h-5" />
-                        </Link>
-                        {deleteConfirm === song.id ? (
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleDelete(song.id)}
-                              className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-colors"
-                            >
-                              Confirm
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(null)}
-                              className="px-3 py-1.5 rounded-lg bg-muted text-foreground text-sm font-medium hover:bg-muted/80 transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setDeleteConfirm(song.id)}
-                            className="p-2 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                            aria-label="Delete song"
-                          >
-                            <TrashIcon className="w-5 h-5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              {songs.map((song) => (
+                <SongCard
+                  key={song.id}
+                  song={song}
+                  isRenaming={renamingSongId === song.id}
+                  renameValue={renameValue}
+                  renaming={renaming}
+                  deleteConfirm={deleteConfirm === song.id}
+                  onStartRename={() => startRename(song)}
+                  onRenameChange={setRenameValue}
+                  onRenameSubmit={() => handleRename(song.id)}
+                  onRenameCancel={() => setRenamingSongId(null)}
+                  onDeleteClick={() => setDeleteConfirm(song.id)}
+                  onDeleteConfirm={() => handleDelete(song.id)}
+                  onDeleteCancel={() => setDeleteConfirm(null)}
+                  onTogglePublic={() => handleTogglePublic(song.id)}
+                />
+              ))}
             </div>
           ) : (
             <div className="text-center py-16 bg-card border border-border rounded-xl">

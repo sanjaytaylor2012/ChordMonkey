@@ -72,34 +72,34 @@ export default function Discover() {
   const [sortBy, setSortBy] = useState<"recent" | "popular">("recent");
   const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set());
 
-  // Fetch all songs
-  useEffect(() => {
-    async function fetchSongs() {
-      const { data, error } = await supabase
-        .from("songs")
-        .select(`
-          id,
-          title,
-          sections,
-          created_at,
-          user_id,
-          profiles (
-            name
-          )
-        `)
-        .order("created_at", { ascending: false });
+// Fetch all public songs
+useEffect(() => {
+  async function fetchSongs() {
+    const { data, error } = await supabase
+      .from("songs")
+      .select(`
+        id,
+        title,
+        sections,
+        created_at,
+        user_id,
+        profiles (
+          name
+        )
+      `)
+      .eq("is_public", true)
+      .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("Error fetching songs:", error);
-      } else {
-        setSongs(data || []);
-      }
-      setLoading(false);
+    if (error) {
+      console.error("Error fetching songs:", error);
+    } else {
+      setSongs(data || []);
     }
+    setLoading(false);
+  }
 
-    fetchSongs();
-  }, []);
-
+  fetchSongs();
+}, []);
   // Get all chords from all sections
   function getAllChords(song: Song): string[] {
     if (!song.sections || !Array.isArray(song.sections)) return [];
