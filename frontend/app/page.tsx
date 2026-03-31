@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import RecordingSection from "@/components/RecordingSection";
@@ -24,7 +24,7 @@ function createSection(sectionNumber: number, chords: string[] = []): SongSectio
   };
 }
 
-export default function Home() {
+function HomeContent() {
   const searchParams = useSearchParams();
   const songId = searchParams.get("song");
   const { user } = useAuth();
@@ -292,5 +292,19 @@ export default function Home() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="text-muted-foreground">Loading...</div>
+        </div>
+      }
+    >
+      <HomeContent />
+    </Suspense>
   );
 }
