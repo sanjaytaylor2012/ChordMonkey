@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useRef, useState } from "react";
-import {url} from "@/lib/utils";
+import React, { useEffect, useRef, useState } from "react";
+import { url } from "@/lib/utils";
 import type {
   DisplayInstrument,
   MidiAnalysis,
@@ -23,20 +23,165 @@ export default function RecordingSection({
   onDisplayInstrumentChange,
   onRecommendationLevelChange,
 }: RecordingSectionProps) {
-
-  const TRANSCRIBE_URL =
-    `${url}/transcribe-to-midi`;
-  const ANALYZE_URL =
-    `${url}/analyze-midi`;
+  const TRANSCRIBE_URL = `${url}/transcribe-to-midi`;
+  const ANALYZE_URL = `${url}/analyze-midi`;
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const animationRef = useRef<number | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const [isRecording, setIsRecording] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, []);
+
+  // Draw idle waveform (flat line)
+  useEffect(() => {
+    if (!isRecording && !audioUrl) {
+      drawIdleWaveform();
+    }
+  }, [isRecording, audioUrl]);
+
+  function drawIdleWaveform() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const width = canvas.width;
+    const height = canvas.height;
+
+    ctx.clearRect(0, 0, width, height);
+
+    // Draw flat line
+    ctx.beginPath();
+    ctx.strokeStyle = getComputedStyle(document.documentElement)
+      .getPropertyValue("--muted-foreground")
+      .trim() || "#888";
+    ctx.lineWidth = 2;
+    ctx.moveTo(0, height / 2);
+    ctx.lineTo(width, height / 2);
+    ctx.stroke();
+  }
+
+  function drawLiveWaveform() {
+    const canvas = canvasRef.current;
+    const analyser = analyserRef.current;
+    if (!canvas || !analyser) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const width = canvas.width;
+    const height = canvas.height;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    function draw() {
+      if (!analyser || !ctx) return;
+
+      animationRef.current = requestAnimationFrame(draw);
+      analyser.getByteTimeDomainData(dataArray);
+
+      // Clear canvas
+      ctx.clearRect(0, 0, width, height);
+
+      // Draw waveform
+      ctx.beginPath();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = getComputedStyle(document.documentElement)
+        .getPropertyValue("--primary")
+        .trim() || "#8b5cf6";
+
+      const sliceWidth = width / bufferLength;
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const v = dataArray[i] / 128.0;
+        const y = (v * height) / 2;
+
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+
+        x += sliceWidth;
+      }
+
+      ctx.lineTo(width, height / 2);
+      ctx.stroke();
+    }
+
+    draw();
+  }
+
+  async function drawStaticWaveform(blob: Blob) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    try {
+      const audioContext = new AudioContext();
+      const arrayBuffer = await blob.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+      const width = canvas.width;
+      const height = canvas.height;
+      const data = audioBuffer.getChannelData(0);
+      const step = Math.ceil(data.length / width);
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.beginPath();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = getComputedStyle(document.documentElement)
+        .getPropertyValue("--primary")
+        .trim() || "#8b5cf6";
+
+      for (let i = 0; i < width; i++) {
+        let min = 1.0;
+        let max = -1.0;
+
+        for (let j = 0; j < step; j++) {
+          const datum = data[i * step + j];
+          if (datum < min) min = datum;
+          if (datum > max) max = datum;
+        }
+
+        const yMin = ((1 + min) * height) / 2;
+        const yMax = ((1 + max) * height) / 2;
+
+        ctx.moveTo(i, yMin);
+        ctx.lineTo(i, yMax);
+      }
+
+      ctx.stroke();
+      audioContext.close();
+    } catch (err) {
+      console.error("Error drawing static waveform:", err);
+      drawIdleWaveform();
+    }
+  }
 
   async function startRecording() {
     setError(null);
@@ -46,6 +191,20 @@ export default function RecordingSection({
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      // Set up audio context and analyser for visualization
+      const audioContext = new AudioContext();
+      audioContextRef.current = audioContext;
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      source.connect(analyser);
+      analyserRef.current = analyser;
+
+      // Start drawing live waveform
+      drawLiveWaveform();
+
       const mr = new MediaRecorder(stream);
       mediaRecorderRef.current = mr;
 
@@ -56,11 +215,26 @@ export default function RecordingSection({
       mr.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
 
+        // Stop animation
+        if (animationRef.current) {
+          cancelAnimationFrame(animationRef.current);
+          animationRef.current = null;
+        }
+
+        // Close audio context
+        if (audioContextRef.current) {
+          audioContextRef.current.close();
+          audioContextRef.current = null;
+        }
+
         const blob = new Blob(chunksRef.current, {
           type: mr.mimeType || "audio/webm",
         });
         setAudioBlob(blob);
         setAudioUrl(URL.createObjectURL(blob));
+
+        // Draw static waveform
+        drawStaticWaveform(blob);
       };
 
       mr.start();
@@ -79,8 +253,8 @@ export default function RecordingSection({
     return new Promise<Blob | null>((resolve) => {
       const originalOnStop = recorder.onstop;
 
-      recorder.onstop = () => {
-        originalOnStop?.call(recorder, new Event("stop"));
+      recorder.onstop = (event) => {
+        originalOnStop?.call(recorder, event);
         const recordedBlob = new Blob(chunksRef.current, {
           type: recorder.mimeType || "audio/webm",
         });
@@ -105,7 +279,10 @@ export default function RecordingSection({
       const form = new FormData();
       form.append("file", file);
 
-      const transcribeResp = await fetch(TRANSCRIBE_URL, { method: "POST", body: form });
+      const transcribeResp = await fetch(TRANSCRIBE_URL, {
+        method: "POST",
+        body: form,
+      });
       if (!transcribeResp.ok) throw new Error(await transcribeResp.text());
 
       const midiBlob = await transcribeResp.blob();
@@ -115,7 +292,10 @@ export default function RecordingSection({
       const midiForm = new FormData();
       midiForm.append("file", midiFile);
 
-      const analyzeResp = await fetch(ANALYZE_URL, { method: "POST", body: midiForm });
+      const analyzeResp = await fetch(ANALYZE_URL, {
+        method: "POST",
+        body: midiForm,
+      });
       if (!analyzeResp.ok) throw new Error(await analyzeResp.text());
 
       const analysis = await analyzeResp.json();
@@ -135,6 +315,12 @@ export default function RecordingSection({
   async function stopAndConvert() {
     const recordedBlob = await stopRecording();
     await convertToMidi(recordedBlob);
+  }
+
+  function handleClearRecording() {
+    setAudioUrl(null);
+    setAudioBlob(null);
+    drawIdleWaveform();
   }
 
   return (
@@ -195,23 +381,39 @@ export default function RecordingSection({
         </div>
       </div>
       <div className="bg-card border border-border rounded-xl p-6">
-        {/* Waveform Placeholder */}
-        <div className="bg-muted h-16 rounded-lg mb-5 flex items-center justify-center">
-          {isRecording ? (
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 bg-red-500 rounded-full animate-recording" />
-              <span className="text-sm text-muted-foreground">
-                Recording...
-              </span>
+        {/* Waveform Display */}
+        <div className="bg-muted h-24 rounded-lg mb-5 flex items-center justify-center relative overflow-hidden">
+          <canvas
+            ref={canvasRef}
+            width={800}
+            height={96}
+            className="w-full h-full"
+          />
+          {isRecording && (
+            <div className="absolute top-2 left-2 flex items-center gap-2">
+              <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+              <span className="text-xs text-muted-foreground">Recording</span>
             </div>
-          ) : audioUrl ? (
-            <audio controls src={audioUrl} className="h-10" />
-          ) : (
-            <span className="text-sm text-muted-foreground">
-              Audio Waveform Display
+          )}
+          {!isRecording && !audioUrl && (
+            <span className="absolute top-1/2 -translate-y-5 left-1/2 -translate-x-1/2 text-xs text-muted-foreground">
+              Press Record to start
             </span>
           )}
         </div>
+
+        {/* Audio Playback */}
+        {audioUrl && !isRecording && (
+          <div className="flex items-center gap-3 mb-5">
+            <audio controls src={audioUrl} className="flex-1 h-10" />
+            <button
+              onClick={handleClearRecording}
+              className="px-3 py-2 text-sm rounded-lg bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+        )}
 
         {/* Controls */}
         <div className="flex justify-center gap-3">

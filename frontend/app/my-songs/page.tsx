@@ -241,12 +241,13 @@ function SongCard({
   }
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/5">
-      <div className="flex items-start justify-between">
-        {/* Song Info */}
-        <div className="flex-1">
+    <div className="bg-card border border-border rounded-xl p-4 sm:p-5 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/5">
+      {/* Header Row: Title + Actions */}
+      <div className="flex items-start justify-between gap-3 mb-3">
+        {/* Title */}
+        <div className="flex-1 min-w-0">
           {isRenaming ? (
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex flex-wrap items-center gap-2">
               <input
                 type="text"
                 value={renameValue}
@@ -256,104 +257,42 @@ function SongCard({
                   if (e.key === "Escape") onRenameCancel();
                 }}
                 autoFocus
-                className="text-lg font-semibold text-foreground bg-transparent border-b border-primary outline-none px-1"
+                className="text-lg font-semibold text-foreground bg-transparent border-b border-primary outline-none px-1 min-w-0 flex-1"
               />
-              <button
-                onClick={onRenameSubmit}
-                disabled={renaming}
-                className="px-3 py-1 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-              >
-                {renaming ? "..." : "Save"}
-              </button>
-              <button
-                onClick={onRenameCancel}
-                className="px-3 py-1 rounded-md bg-muted text-foreground text-sm font-medium hover:bg-muted/80 transition-colors"
-              >
-                Cancel
-              </button>
+              <div className="flex gap-1">
+                <button
+                  onClick={onRenameSubmit}
+                  disabled={renaming}
+                  className="px-2 py-1 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  {renaming ? "..." : "Save"}
+                </button>
+                <button
+                  onClick={onRenameCancel}
+                  className="px-2 py-1 rounded-md bg-muted text-foreground text-xs font-medium hover:bg-muted/80 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-lg font-semibold text-foreground">
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-foreground truncate">
                 {song.title}
               </h3>
               <button
                 onClick={onStartRename}
-                className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
+                className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
                 aria-label="Rename song"
               >
                 <PencilIcon className="w-4 h-4" />
               </button>
             </div>
           )}
-          <div className="flex items-center gap-3 text-sm text-muted-foreground mb-4">
-            <span>
-              Created {formatDate(song.created_at)} • Updated{" "}
-              {formatDate(song.updated_at)}
-            </span>
-            <button
-              onClick={onTogglePublic}
-              className={`flex items-center gap-2 px-2.5 py-1 rounded-full border transition-all hover:scale-105 ${
-                song.is_public
-                  ? "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30 hover:bg-green-500/20"
-                  : "bg-muted text-muted-foreground border-border hover:bg-muted/80 hover:text-foreground"
-              }`}
-              title={song.is_public ? "Click to make private" : "Click to make public"}
-            >
-              {song.is_public ? (
-                <GlobeIcon className="w-3.5 h-3.5" />
-              ) : (
-                <LockIcon className="w-3.5 h-3.5" />
-              )}
-              <span className="text-xs font-medium">{song.is_public ? "Public" : "Private"}</span>
-              <div
-                className={`w-8 h-4 rounded-full relative transition-colors ${
-                  song.is_public ? "bg-green-500" : "bg-muted-foreground/30"
-                }`}
-              >
-                <div
-                  className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow-sm transition-transform ${
-                    song.is_public ? "translate-x-4" : "translate-x-0.5"
-                  }`}
-                />
-              </div>
-            </button>
-          </div>
-
-          {/* Chord Progression */}
-          {chordsWithIndices.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {chordsWithIndices.slice(0, 12).map((item, index) => {
-                const playing = isChordPlaying(
-                  item.sectionIndex,
-                  item.chordIndex
-                );
-                return (
-                  <span
-                    key={index}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
-                      playing
-                        ? "bg-primary text-primary-foreground scale-110 shadow-lg"
-                        : "bg-primary/10 text-primary"
-                    }`}
-                  >
-                    {item.chord}
-                  </span>
-                );
-              })}
-              {chordsWithIndices.length > 12 && (
-                <span className="px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-sm font-medium">
-                  +{chordsWithIndices.length - 12} more
-                </span>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground italic">No chords yet</p>
-          )}
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-2 ml-4">
+        {/* Action Buttons */}
+        <div className="flex items-center gap-1 flex-shrink-0">
           <button
             onClick={isPlaying ? stopPlayback : playProgression}
             disabled={!hasPlayableChords}
@@ -366,24 +305,17 @@ function SongCard({
               <PlayIcon className="w-5 h-5" />
             )}
           </button>
-          <Link
-            href={`/?song=${song.id}`}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-            aria-label="Continue editing"
-          >
-            Edit Song
-          </Link>
           {deleteConfirm ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <button
                 onClick={onDeleteConfirm}
-                className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-colors"
+                className="px-2 py-1.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 transition-colors"
               >
-                Confirm
+                Delete
               </button>
               <button
                 onClick={onDeleteCancel}
-                className="px-3 py-1.5 rounded-lg bg-muted text-foreground text-sm font-medium hover:bg-muted/80 transition-colors"
+                className="px-2 py-1.5 rounded-lg bg-muted text-foreground text-xs font-medium hover:bg-muted/80 transition-colors"
               >
                 Cancel
               </button>
@@ -399,6 +331,79 @@ function SongCard({
           )}
         </div>
       </div>
+
+      {/* Meta Row: Date + Visibility */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground mb-4">
+        <span>Updated {formatDate(song.updated_at)}</span>
+        <span className="hidden sm:inline">•</span>
+        <span className="hidden sm:inline">Created {formatDate(song.created_at)}</span>
+        <button
+          onClick={onTogglePublic}
+          className={`flex items-center gap-2 px-2.5 py-1 rounded-full border transition-all hover:scale-105 ${
+            song.is_public
+              ? "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30 hover:bg-green-500/20"
+              : "bg-muted text-muted-foreground border-border hover:bg-muted/80 hover:text-foreground"
+          }`}
+          title={song.is_public ? "Click to make private" : "Click to make public"}
+        >
+          {song.is_public ? (
+            <GlobeIcon className="w-3.5 h-3.5" />
+          ) : (
+            <LockIcon className="w-3.5 h-3.5" />
+          )}
+          <span className="text-xs font-medium">{song.is_public ? "Public" : "Private"}</span>
+          <div
+            className={`w-8 h-4 rounded-full relative transition-colors ${
+              song.is_public ? "bg-green-500" : "bg-muted-foreground/30"
+            }`}
+          >
+            <div
+              className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow-sm transition-transform ${
+                song.is_public ? "translate-x-4" : "translate-x-0.5"
+              }`}
+            />
+          </div>
+        </button>
+      </div>
+
+      {/* Chord Progression */}
+      {chordsWithIndices.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-4">
+          {chordsWithIndices.slice(0, 12).map((item, index) => {
+            const playing = isChordPlaying(
+              item.sectionIndex,
+              item.chordIndex
+            );
+            return (
+              <span
+                key={index}
+                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all duration-150 ${
+                  playing
+                    ? "bg-primary text-primary-foreground scale-110 shadow-lg"
+                    : "bg-primary/10 text-primary"
+                }`}
+              >
+                {item.chord}
+              </span>
+            );
+          })}
+          {chordsWithIndices.length > 12 && (
+            <span className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-muted text-muted-foreground text-xs sm:text-sm font-medium">
+              +{chordsWithIndices.length - 12} more
+            </span>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground italic mb-4">No chords yet</p>
+      )}
+
+      {/* Edit Button - Full Width */}
+      <Link
+        href={`/?song=${song.id}`}
+        className="flex items-center justify-center gap-2 w-full px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+      >
+        Edit Song
+      </Link>
     </div>
   );
 }

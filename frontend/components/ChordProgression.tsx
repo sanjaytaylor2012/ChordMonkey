@@ -29,6 +29,7 @@ interface ChordProgressionProps {
   onRenameSection: (sectionIndex: number, title: string) => void;
   loadedSongId?: string | null;
   loadedSongTitle?: string | null;
+  onExitSong?: () => void;
 }
 
 function PencilIcon({ className }: { className?: string }) {
@@ -112,12 +113,14 @@ export default function ChordProgression({
   onRenameSection,
   loadedSongId,
   loadedSongTitle,
+  onExitSong,
 }: ChordProgressionProps) {
   const { user } = useAuth();
   const [songTitle, setSongTitle] = useState("Untitled Song");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [openAddMenuSection, setOpenAddMenuSection] = useState<number | null>(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
   const [saveTitle, setSaveTitle] = useState("");
   const [isPublic, setIsPublic] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -184,6 +187,63 @@ export default function ChordProgression({
     setShowSaveModal(true);
   }
 
+  function handleExitClick() {
+    setShowExitModal(true);
+  }
+
+  function handleExitWithoutSaving() {
+    setShowExitModal(false);
+    if (onExitSong) {
+      onExitSong();
+    }
+  }
+
+  async function handleSaveAndExit() {
+    if (!user) return;
+
+    setSaving(true);
+    setSaveError(null);
+
+    let result;
+
+    if (loadedSongId) {
+      result = await supabase
+        .from("songs")
+        .update({
+          title: songTitle.trim() || "Untitled Song",
+          sections: sections,
+          is_public: isPublic,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", loadedSongId)
+        .select();
+    } else {
+      result = await supabase
+        .from("songs")
+        .insert({
+          user_id: user.id,
+          title: songTitle.trim() || "Untitled Song",
+          sections: sections,
+          is_public: isPublic,
+        })
+        .select();
+    }
+
+    const { error } = result;
+
+    if (error) {
+      console.error("Error saving song:", error.message);
+      setSaveError(error.message || "Failed to save song. Please try again.");
+      setSaving(false);
+    } else {
+      setSaving(false);
+      setShowExitModal(false);
+      if (onExitSong) {
+        onExitSong();
+      }
+    }
+  }
+
   async function handleSaveConfirm() {
     if (!user) return;
 
@@ -193,7 +253,6 @@ export default function ChordProgression({
     let result;
 
     if (loadedSongId) {
-      // Update existing song
       result = await supabase
         .from("songs")
         .update({
@@ -205,7 +264,6 @@ export default function ChordProgression({
         .eq("id", loadedSongId)
         .select();
     } else {
-      // Insert new song
       result = await supabase
         .from("songs")
         .insert({
@@ -270,7 +328,7 @@ export default function ChordProgression({
             </div>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="secondary"
@@ -286,6 +344,14 @@ export default function ChordProgression({
             >
               Clear
             </button>
+            {loadedSongId && (
+              <button
+                onClick={handleExitClick}
+                className="px-4 py-2 text-sm bg-muted text-foreground rounded-md hover:bg-muted/80 transition-colors"
+              >
+                Exit
+              </button>
+            )}
             <button
               onClick={handleSaveClick}
               className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
@@ -425,6 +491,48 @@ export default function ChordProgression({
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Exit Modal */}
+      {showExitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md mx-4 shadow-lg">
+            <h3 className="text-lg font-semibold text-foreground mb-2">
+              Exit without saving?
+            </h3>
+            <p className="text-muted-foreground mb-6">
+              You have unsaved changes. Would you like to save before starting a new song?
+            </p>
+
+            {saveError && (
+              <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm">
+                {saveError}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleSaveAndExit}
+                disabled={saving || !user}
+                className="w-full px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Save & Start New Song"}
+              </button>
+              <button
+                onClick={handleExitWithoutSaving}
+                className="w-full px-4 py-2 rounded-lg bg-red-500/10 text-red-500 font-medium hover:bg-red-500/20 transition-colors"
+              >
+                Discard Changes
+              </button>
+              <button
+                onClick={() => setShowExitModal(false)}
+                className="w-full px-4 py-2 rounded-lg bg-muted text-foreground font-medium hover:bg-muted/80 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

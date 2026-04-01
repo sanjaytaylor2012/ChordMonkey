@@ -188,6 +188,20 @@ function HomeContent() {
     );
   }
 
+  function handleExitSong() {
+    // Clear URL parameter
+    window.history.pushState({}, "", "/");
+
+    // Reset state
+    setSections([createSection(1)]);
+    setCurrentSectionIndex(null);
+    setCurrentChordIndex(null);
+    setSelectedChord(null);
+    setLastAddedChord(null);
+    setLoadedSongId(null);
+    setLoadedSongTitle(null);
+  }
+
   function handleRecordingAnalyzed(analysis: MidiAnalysis) {
     try {
       const first = analysis?.events?.[0];
@@ -287,6 +301,7 @@ function HomeContent() {
               onRenameSection={handleRenameSection}
               loadedSongId={loadedSongId}
               loadedSongTitle={loadedSongTitle}
+              onExitSong={handleExitSong}
             />
           </div>
         </div>
