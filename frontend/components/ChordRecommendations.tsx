@@ -277,7 +277,10 @@ export default function ChordRecommendations({
       <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
         Suggested Next Chords
       </h2>
-      <div className="rounded-xl border border-border bg-card p-6">
+      <div
+        data-tutorial="recommendations-panel"
+        className="rounded-xl border border-border bg-card p-6"
+      >
         <div className="mb-4 rounded-lg border border-border bg-background p-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm text-muted-foreground">

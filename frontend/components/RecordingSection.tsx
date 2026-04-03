@@ -14,6 +14,8 @@ interface RecordingSectionProps {
   recommendationLevel: RecommendationLevel;
   onDisplayInstrumentChange: (instrument: DisplayInstrument) => void;
   onRecommendationLevelChange: (level: RecommendationLevel) => void;
+  onStartTutorial?: () => void;
+  isTutorialHighlighted?: boolean;
 }
 
 export default function RecordingSection({
@@ -22,6 +24,8 @@ export default function RecordingSection({
   recommendationLevel,
   onDisplayInstrumentChange,
   onRecommendationLevelChange,
+  onStartTutorial,
+  isTutorialHighlighted = false,
 }: RecordingSectionProps) {
   const TRANSCRIBE_URL = `${url}/transcribe-to-midi`;
   const ANALYZE_URL = `${url}/analyze-midi`;
@@ -330,7 +334,23 @@ export default function RecordingSection({
           Recording
         </h2>
         <div className="flex items-center justify-center gap-2 sm:justify-end">
+          <button
+            type="button"
+            onClick={onStartTutorial}
+            data-tutorial="tutorial-launch"
+            className={`rounded-lg border px-3 py-2 text-[10px] font-semibold uppercase tracking-wide transition-all sm:text-xs ${
+              isTutorialHighlighted
+                ? "border-primary bg-primary text-primary-foreground shadow-[0_0_0_4px_rgba(59,130,246,0.18)]"
+                : "border-border bg-card text-foreground hover:bg-muted"
+            }`}
+          >
+            How to use Chord Monkey
+          </button>
           <div className="flex items-center rounded-lg border border-border bg-card p-1 w-fit">
+            <div
+              data-tutorial="instrument-toggle"
+              className="flex items-center rounded-lg"
+            >
             <button
               type="button"
               onClick={() => onDisplayInstrumentChange("guitar")}
@@ -353,8 +373,12 @@ export default function RecordingSection({
             >
               Keyboard
             </button>
+            </div>
           </div>
-          <div className="flex items-center rounded-lg border border-border bg-card p-1 w-fit">
+          <div
+            data-tutorial="mode-toggle"
+            className="flex items-center rounded-lg border border-border bg-card p-1 w-fit"
+          >
             <button
               type="button"
               onClick={() => onRecommendationLevelChange("beginner")}
@@ -416,7 +440,10 @@ export default function RecordingSection({
         )}
 
         {/* Controls */}
-        <div className="flex justify-center gap-3">
+        <div
+          data-tutorial="recording-controls"
+          className="flex justify-center gap-3"
+        >
           <button
             onClick={startRecording}
             disabled={isRecording || busy}
