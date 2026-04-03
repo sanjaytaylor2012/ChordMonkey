@@ -8,6 +8,7 @@ import ChordDisplay from "@/components/ChordDisplay";
 import ChordRecommendations from "@/components/ChordRecommendations";
 import ChordProgression, { SongSection } from "@/components/ChordProgression";
 import ParticlesBackground from "@/components/ParticlesBackground";
+import { CreatePageTutorial } from "@/components/CreatePageTutorial";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/AuthProvider";
 import type {
@@ -56,6 +57,74 @@ function HomeContent() {
   const [loadedSongId, setLoadedSongId] = useState<string | null>(null);
   const [loadedSongTitle, setLoadedSongTitle] = useState<string | null>(null);
   const [loadingSong, setLoadingSong] = useState(false);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+  const [tutorialStepIndex, setTutorialStepIndex] = useState(0);
+
+  const tutorialSteps = [
+    {
+      id: "tutorial-launch",
+      target: "tutorial-launch",
+      title: "Start here",
+      description:
+        "Use this button anytime to restart the walkthrough. It is highlighted so new users know where to begin.",
+    },
+    {
+      id: "recording-controls",
+      target: "recording-controls",
+      title: "Record each chord",
+      description:
+        "Record one chord at a time. Press Record, play your chord, then press Stop & Convert to MIDI so Chord Monkey can detect it before you add it to your song.",
+    },
+    {
+      id: "instrument-toggle",
+      target: "instrument-toggle",
+      title: "Switch between guitar or keyboard",
+      description:
+        "Use this toggle to swap the chord diagram between guitar and keyboard while keeping the same detected or selected chord.",
+    },
+    {
+      id: "mode-toggle",
+      target: "mode-toggle",
+      title: "Beginner vs Advanced mode",
+      description:
+        "Beginner mode stays closer to basic diatonic harmony. This mode will provide users with chords that stay within the chosen or detected key. \n Advanced mode suggests more colorful or tension-heavy moves for less predictable progressions. This mode offers recommendations for more complicated chords, as well as chords/tones not strictly within the chosen or detected key. These chords recommendations are highlighted with a yellow border.",
+    },
+    {
+      id: "detected-chord",
+      target: "detected-chord",
+      title: "Detected chord display",
+      description:
+        "After recording, this panel shows the detected chord and diagram. Use the + button here to add that exact chord directly to your progression. \n Clicking on a recommended chord will show its voicing in this section until a new chord is recorded.",
+    },
+    {
+      id: "recommendations-panel",
+      target: "recommendations-panel",
+      title: "Add recommended chords",
+      description:
+        "This panel suggests next chords based on what chords are already in the Chord Progression section. Click a card to inspect it, Play to preview it, or + to add it.",
+    },
+    {
+      id: "specific-chords",
+      target: "specific-chords",
+      title: "Add a specific chord manually",
+      description:
+        "Use this + slot inside a section to open the chord picker. It lets you choose your own chord roots and qualities when you want something other than the recommendations.",
+    },
+    {
+      id: "add-section",
+      target: "add-section",
+      title: "Build multiple song sections",
+      description:
+        "Add new sections for verse, chorus, bridge, or any other part of the song. Each section keeps its own chord list and title.",
+    },
+    {
+      id: "playback-button",
+      target: "playback-button",
+      title: "Playback your progression",
+      description:
+        "Use Play to hear the progression from left to right. Chord Monkey will highlight each chord as it plays so you can check the flow of the arrangement.",
+    },
+  ] as const;
 
   // Load song from URL parameter
   useEffect(() => {
@@ -90,6 +159,7 @@ function HomeContent() {
   }, [songId, user]);
 
   const progression = sections.flatMap((section) => section.chords);
+  const activeTutorialStep = tutorialSteps[tutorialStepIndex] ?? null;
 
   // Handle selecting a chord from recommendations
   function handleSelectChord(chord: string) {
@@ -108,6 +178,25 @@ function HomeContent() {
 
   function handleRefreshRecommendations() {
     setLastAddedChord(null);
+  }
+
+  function handleStartTutorial() {
+    setTutorialStepIndex(0);
+    setIsTutorialOpen(true);
+  }
+
+  function handleCloseTutorial() {
+    setIsTutorialOpen(false);
+  }
+
+  function handleNextTutorialStep() {
+    setTutorialStepIndex((current) =>
+      Math.min(current + 1, tutorialSteps.length - 1),
+    );
+  }
+
+  function handlePreviousTutorialStep() {
+    setTutorialStepIndex((current) => Math.max(current - 1, 0));
   }
 
   // Handle adding a chord to the progression
@@ -264,6 +353,8 @@ function HomeContent() {
               recommendationLevel={recommendationLevel}
               onDisplayInstrumentChange={setDisplayInstrument}
               onRecommendationLevelChange={setRecommendationLevel}
+              onStartTutorial={handleStartTutorial}
+              isTutorialHighlighted={!isTutorialOpen}
             />
           </div>
 
@@ -302,9 +393,18 @@ function HomeContent() {
               loadedSongId={loadedSongId}
               loadedSongTitle={loadedSongTitle}
               onExitSong={handleExitSong}
+              tutorialStepId={activeTutorialStep?.id ?? null}
             />
           </div>
         </div>
+        <CreatePageTutorial
+          open={isTutorialOpen}
+          currentStep={tutorialStepIndex}
+          steps={[...tutorialSteps]}
+          onClose={handleCloseTutorial}
+          onNext={handleNextTutorialStep}
+          onPrevious={handlePreviousTutorialStep}
+        />
       </div>
     </>
   );

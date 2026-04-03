@@ -118,7 +118,8 @@ export function SectionBlock({
             onClick={() =>
               setOpenAddMenuSection(openAddMenuSection === sectionIndex ? null : sectionIndex)
             }
-            className="min-w-[70px] px-5 py-4 rounded-lg border-2 border-dashed border-border flex items-center justify-center text-2xl text-muted-foreground cursor-pointer hover:border-muted-foreground hover:text-foreground transition-colors self-stretch"
+            data-tutorial={sectionIndex === 0 ? "specific-chords" : undefined}
+            className="min-w-[70px] min-h-[116px] px-5 py-4 rounded-lg border-2 border-dashed border-border flex items-center justify-center text-2xl text-muted-foreground cursor-pointer hover:border-muted-foreground hover:text-foreground transition-colors self-stretch"
             aria-label="Add chord to progression"
             aria-expanded={openAddMenuSection === sectionIndex}
           >
