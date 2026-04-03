@@ -30,6 +30,7 @@ interface ChordProgressionProps {
   loadedSongId?: string | null;
   loadedSongTitle?: string | null;
   onExitSong?: () => void;
+  tutorialStepId?: string | null;
 }
 
 function PencilIcon({ className }: { className?: string }) {
@@ -114,6 +115,7 @@ export default function ChordProgression({
   loadedSongId,
   loadedSongTitle,
   onExitSong,
+  tutorialStepId,
 }: ChordProgressionProps) {
   const { user } = useAuth();
   const [songTitle, setSongTitle] = useState("Untitled Song");
@@ -149,6 +151,15 @@ export default function ChordProgression({
       setSongTitle("Untitled Song");
     }
   }, [loadedSongId, loadedSongTitle]);
+
+  useEffect(() => {
+    if (tutorialStepId === "specific-chords") {
+      setOpenAddMenuSection(0);
+      return;
+    }
+
+    setOpenAddMenuSection((current) => (current === 0 ? null : current));
+  }, [tutorialStepId]);
 
   function handleTitleBlur() {
     setIsEditingTitle(false);
@@ -295,7 +306,10 @@ export default function ChordProgression({
       <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">
         Your Chord Progression
       </h2>
-      <div className="bg-card border border-border rounded-xl p-6">
+      <div
+        data-tutorial="progression-panel"
+        className="bg-card border border-border rounded-xl p-6"
+      >
         <div className="flex flex-col gap-3 mb-5 sm:flex-row sm:items-center sm:justify-between">
           {isEditingTitle ? (
             <input
@@ -335,6 +349,7 @@ export default function ChordProgression({
               size="sm"
               onClick={isPlaying ? stopPlayback : playProgression}
               disabled={!hasPlayableChords}
+              data-tutorial="playback-button"
             >
               {isPlaying ? "Stop" : "Play"}
             </Button>
@@ -383,6 +398,7 @@ export default function ChordProgression({
           <button
             type="button"
             onClick={onAddSection}
+            data-tutorial="add-section"
             className="w-fit text-base font-normal text-muted-foreground hover:text-primary transition-colors"
           >
             + Add new section

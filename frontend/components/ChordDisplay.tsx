@@ -39,7 +39,10 @@ export default function ChordDisplay({
       <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">
         {label}
       </h2>
-      <div className="bg-card border border-border rounded-xl p-6 text-center flex-1 flex flex-col justify-center">
+      <div
+        data-tutorial="detected-chord"
+        className="bg-card border border-border rounded-xl p-6 text-center flex-1 flex flex-col justify-center"
+      >
         {chord ? (
           <>
             <div className="flex justify-end mb-2">
