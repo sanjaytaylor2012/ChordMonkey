@@ -12,5 +12,6 @@ dependencies = [
     "music21>=9.9.1",
     "python-multipart>=0.0.22",
     "setuptools<80",
+    "slowapi>=0.1.9",
     "uvicorn>=0.40.0",
 ]
