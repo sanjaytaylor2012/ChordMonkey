@@ -5,6 +5,7 @@ import { Navbar } from "@/components/Navbar";
 import ParticlesBackground from "@/components/ParticlesBackground";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/AuthProvider";
+import { useChordPlayback } from "@/components/chord-progression/useChordPlayback";
 
 interface Song {
   id: string;
@@ -14,7 +15,9 @@ interface Song {
   user_id: string;
   profiles: {
     name: string;
-  }[] | null;
+    avatar_url: string | null;
+  } | null;
+  like_count: number;
 }
 
 function HeartIcon({ className, filled }: { className?: string; filled?: boolean }) {
@@ -52,6 +55,58 @@ function SearchIcon({ className }: { className?: string }) {
   );
 }
 
+function PlayIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <polygon points="5 3 19 12 5 21 5 3" />
+    </svg>
+  );
+}
+
+function StopIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <rect x="6" y="6" width="12" height="12" />
+    </svg>
+  );
+}
+
+function UserIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <circle cx="12" cy="8" r="5" />
+      <path d="M20 21a8 8 0 0 0-16 0" />
+    </svg>
+  );
+}
+
 function formatDate(dateString: string) {
   const date = new Date(dateString);
   const now = new Date();
@@ -64,42 +119,233 @@ function formatDate(dateString: string) {
   return date.toLocaleDateString();
 }
 
+function SongCard({
+  song,
+  isLiked,
+  onToggleLike,
+  disabled,
+}: {
+  song: Song;
+  isLiked: boolean;
+  onToggleLike: () => void;
+  disabled: boolean;
+}) {
+  const sections = song.sections || [];
+  const {
+    hasPlayableChords,
+    isPlaying,
+    playbackCursor,
+    playProgression,
+    stopPlayback,
+  } = useChordPlayback(sections);
+
+  const authorName = song.profiles?.name || "Anonymous";
+  const avatarUrl = song.profiles?.avatar_url || null;
+
+  function getChordsWithIndices(): {
+    chord: string;
+    sectionIndex: number;
+    chordIndex: number;
+  }[] {
+    if (!sections || !Array.isArray(sections)) return [];
+    const result: {
+      chord: string;
+      sectionIndex: number;
+      chordIndex: number;
+    }[] = [];
+    sections.forEach((section, sectionIndex) => {
+      (section.chords || []).forEach((chord, chordIndex) => {
+        result.push({ chord, sectionIndex, chordIndex });
+      });
+    });
+    return result;
+  }
+
+  const chordsWithIndices = getChordsWithIndices();
+
+  function isChordPlaying(sectionIndex: number, chordIndex: number): boolean {
+    return (
+      isPlaying &&
+      playbackCursor.sectionIndex === sectionIndex &&
+      playbackCursor.chordIndex === chordIndex
+    );
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/5">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          {/* Avatar */}
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={authorName}
+              className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+              <UserIcon className="w-5 h-5 text-muted-foreground" />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg font-semibold text-foreground truncate">
+              {song.title}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {authorName} • {formatDate(song.created_at)}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 ml-3">
+          <button
+            onClick={isPlaying ? stopPlayback : playProgression}
+            disabled={!hasPlayableChords}
+            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label={isPlaying ? "Stop" : "Play"}
+          >
+            {isPlaying ? (
+              <StopIcon className="w-5 h-5" />
+            ) : (
+              <PlayIcon className="w-5 h-5" />
+            )}
+          </button>
+          <button
+            onClick={onToggleLike}
+            disabled={disabled}
+            className={`p-2 rounded-lg transition-colors flex items-center gap-1 ${
+              isLiked
+                ? "text-red-500 bg-red-500/10"
+                : "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+            } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+            aria-label={isLiked ? "Unlike" : "Like"}
+          >
+            <HeartIcon className="w-5 h-5" filled={isLiked} />
+            {song.like_count > 0 && (
+              <span className="text-sm font-medium">{song.like_count}</span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Chords */}
+      {chordsWithIndices.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5 sm:gap-2">
+          {chordsWithIndices.slice(0, 8).map((item, index) => {
+            const playing = isChordPlaying(item.sectionIndex, item.chordIndex);
+            return (
+              <span
+                key={index}
+                className={`px-2 py-1 rounded-md text-sm font-medium transition-all duration-150 ${
+                  playing
+                    ? "bg-primary text-primary-foreground scale-110 shadow-lg"
+                    : "bg-primary/10 text-primary"
+                }`}
+              >
+                {item.chord}
+              </span>
+            );
+          })}
+          {chordsWithIndices.length > 8 && (
+            <span className="px-2 py-1 rounded-md bg-muted text-muted-foreground text-sm font-medium">
+              +{chordsWithIndices.length - 8} more
+            </span>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground italic">No chords yet</p>
+      )}
+    </div>
+  );
+}
+
 export default function Discover() {
   const { user } = useAuth();
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"recent" | "popular">("recent");
-  const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set());
+  const [likedSongIds, setLikedSongIds] = useState<Set<string>>(new Set());
+  const [likingInProgress, setLikingInProgress] = useState<Set<string>>(new Set());
 
-// Fetch all public songs
-useEffect(() => {
-  async function fetchSongs() {
-    const { data, error } = await supabase
-      .from("songs")
-      .select(`
-        id,
-        title,
-        sections,
-        created_at,
-        user_id,
-        profiles (
-          name
-        )
-      `)
-      .eq("is_public", true)
-      .order("created_at", { ascending: false });
+  // Fetch all public songs with like counts
+  useEffect(() => {
+    async function fetchSongs() {
+      // Get songs with profile info
+      const { data: songsData, error: songsError } = await supabase
+        .from("songs")
+        .select(`
+          id,
+          title,
+          sections,
+          created_at,
+          user_id,
+          profiles (
+            name,
+            avatar_url
+          )
+        `)
+        .eq("is_public", true)
+        .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error("Error fetching songs:", error);
-    } else {
-      setSongs(data || []);
+      console.log("Songs data:", songsData);
+
+      if (songsError) {
+        console.error("Error fetching songs:", songsError);
+        setLoading(false);
+        return;
+      }
+
+      // Get like counts for each song
+      const { data: likeCounts, error: likeCountError } = await supabase
+        .from("likes")
+        .select("song_id");
+
+      if (likeCountError) {
+        console.error("Error fetching like counts:", likeCountError);
+      }
+
+      // Count likes per song
+      const likeCountMap: Record<string, number> = {};
+      (likeCounts || []).forEach((like) => {
+        likeCountMap[like.song_id] = (likeCountMap[like.song_id] || 0) + 1;
+      });
+
+      // Add like counts to songs
+      const songsWithLikes = (songsData || []).map((song) => ({
+        ...song,
+        like_count: likeCountMap[song.id] || 0,
+      }));
+
+      setSongs(songsWithLikes);
+      setLoading(false);
     }
-    setLoading(false);
-  }
 
-  fetchSongs();
-}, []);
+    fetchSongs();
+  }, []);
+
+  // Fetch user's likes
+  useEffect(() => {
+    if (!user) {
+      setLikedSongIds(new Set());
+      return;
+    }
+
+    async function fetchUserLikes() {
+      const { data, error } = await supabase
+        .from("likes")
+        .select("song_id")
+        .eq("user_id", user!.id);
+
+      if (error) {
+        console.error("Error fetching user likes:", error);
+      } else {
+        setLikedSongIds(new Set(data?.map((like) => like.song_id) || []));
+      }
+    }
+
+    fetchUserLikes();
+  }, [user]);
+
   // Get all chords from all sections
   function getAllChords(song: Song): string[] {
     if (!song.sections || !Array.isArray(song.sections)) return [];
@@ -110,8 +356,8 @@ useEffect(() => {
   const filteredSongs = songs.filter((song) => {
     const searchLower = search.toLowerCase();
     const chords = getAllChords(song);
-    const authorName = song.profiles?.[0]?.name || "Anonymous";
-    
+    const authorName = song.profiles?.name || "Anonymous";
+
     return (
       song.title.toLowerCase().includes(searchLower) ||
       authorName.toLowerCase().includes(searchLower) ||
@@ -124,22 +370,95 @@ useEffect(() => {
     if (sortBy === "recent") {
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     }
-    // For now, "popular" just shows liked songs first (local state only)
-    const aLiked = likedSongs.has(a.id) ? 1 : 0;
-    const bLiked = likedSongs.has(b.id) ? 1 : 0;
-    return bLiked - aLiked;
+    // Sort by like count
+    return b.like_count - a.like_count;
   });
 
-  function toggleLike(songId: string) {
-    setLikedSongs((prev) => {
+  async function toggleLike(songId: string) {
+    if (!user) {
+      return;
+    }
+
+    if (likingInProgress.has(songId)) return;
+
+    setLikingInProgress((prev) => new Set(prev).add(songId));
+
+    const isCurrentlyLiked = likedSongIds.has(songId);
+
+    // Optimistic update
+    setLikedSongIds((prev) => {
       const next = new Set(prev);
-      if (next.has(songId)) {
+      if (isCurrentlyLiked) {
         next.delete(songId);
       } else {
         next.add(songId);
       }
       return next;
     });
+
+    setSongs((prev) =>
+      prev.map((song) =>
+        song.id === songId
+          ? {
+              ...song,
+              like_count: isCurrentlyLiked
+                ? song.like_count - 1
+                : song.like_count + 1,
+            }
+          : song
+      )
+    );
+
+    try {
+      if (isCurrentlyLiked) {
+        const { error } = await supabase
+          .from("likes")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("song_id", songId);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("likes").insert({
+          user_id: user.id,
+          song_id: songId,
+        });
+
+        if (error) throw error;
+      }
+    } catch (error) {
+      console.error("Error toggling like:", error);
+
+      // Revert optimistic update
+      setLikedSongIds((prev) => {
+        const next = new Set(prev);
+        if (isCurrentlyLiked) {
+          next.add(songId);
+        } else {
+          next.delete(songId);
+        }
+        return next;
+      });
+
+      setSongs((prev) =>
+        prev.map((song) =>
+          song.id === songId
+            ? {
+                ...song,
+                like_count: isCurrentlyLiked
+                  ? song.like_count + 1
+                  : song.like_count - 1,
+              }
+            : song
+        )
+      );
+    } finally {
+      setLikingInProgress((prev) => {
+        const next = new Set(prev);
+        next.delete(songId);
+        return next;
+      });
+    }
   }
 
   if (loading) {
@@ -209,63 +528,15 @@ useEffect(() => {
           {/* Songs Grid */}
           {sortedSongs.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {sortedSongs.map((song) => {
-                const chords = getAllChords(song);
-                const isLiked = likedSongs.has(song.id);
-                const authorName = song.profiles?.[0]?.name || "Anonymous";
-
-                return (
-                  <div
-                    key={song.id}
-                    className="bg-card border border-border rounded-xl p-5 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/5"
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="text-lg font-semibold text-foreground">
-                          {song.title}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          by {authorName} • {formatDate(song.created_at)}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => toggleLike(song.id)}
-                        className={`p-2 rounded-lg transition-colors ${
-                          isLiked
-                            ? "text-red-500 bg-red-500/10"
-                            : "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-                        }`}
-                        aria-label={isLiked ? "Unlike" : "Like"}
-                      >
-                        <HeartIcon className="w-5 h-5" filled={isLiked} />
-                      </button>
-                    </div>
-
-                    {/* Chords */}
-                    {chords.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {chords.slice(0, 8).map((chord, index) => (
-                          <span
-                            key={index}
-                            className="px-2 py-1 rounded-md bg-primary/10 text-primary text-sm font-medium"
-                          >
-                            {chord}
-                          </span>
-                        ))}
-                        {chords.length > 8 && (
-                          <span className="px-2 py-1 rounded-md bg-muted text-muted-foreground text-sm font-medium">
-                            +{chords.length - 8} more
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground italic">
-                        No chords yet
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
+              {sortedSongs.map((song) => (
+                <SongCard
+                  key={song.id}
+                  song={song}
+                  isLiked={likedSongIds.has(song.id)}
+                  onToggleLike={() => toggleLike(song.id)}
+                  disabled={!user || likingInProgress.has(song.id)}
+                />
+              ))}
             </div>
           ) : (
             <div className="text-center py-16 bg-card border border-border rounded-xl">
