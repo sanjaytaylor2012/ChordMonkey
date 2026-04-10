@@ -7,17 +7,21 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/AuthProvider";
 import { useChordPlayback } from "@/components/chord-progression/useChordPlayback";
 
+interface Profile {
+  id: string;
+  name: string;
+  avatar_url: string | null;
+}
+
 interface Song {
   id: string;
   title: string;
   sections: { id: string; title: string; chords: string[] }[];
   created_at: string;
   user_id: string;
-  profiles: {
-    name: string;
-    avatar_url: string | null;
-  } | null;
   like_count: number;
+  author_name: string;
+  author_avatar: string | null;
 }
 
 function HeartIcon({ className, filled }: { className?: string; filled?: boolean }) {
@@ -139,9 +143,6 @@ function SongCard({
     stopPlayback,
   } = useChordPlayback(sections);
 
-  const authorName = song.profiles?.name || "Anonymous";
-  const avatarUrl = song.profiles?.avatar_url || null;
-
   function getChordsWithIndices(): {
     chord: string;
     sectionIndex: number;
@@ -176,10 +177,10 @@ function SongCard({
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-start gap-3 flex-1 min-w-0">
           {/* Avatar */}
-          {avatarUrl ? (
+          {song.author_avatar ? (
             <img
-              src={avatarUrl}
-              alt={authorName}
+              src={song.author_avatar}
+              alt={song.author_name}
               className="w-10 h-10 rounded-full object-cover flex-shrink-0"
             />
           ) : (
@@ -192,7 +193,7 @@ function SongCard({
               {song.title}
             </h3>
             <p className="text-sm text-muted-foreground">
-              {authorName} • {formatDate(song.created_at)}
+              {song.author_name} • {formatDate(song.created_at)}
             </p>
           </div>
         </div>
@@ -270,30 +271,33 @@ export default function Discover() {
   // Fetch all public songs with like counts
   useEffect(() => {
     async function fetchSongs() {
-      // Get songs with profile info
+      // Get songs
       const { data: songsData, error: songsError } = await supabase
         .from("songs")
-        .select(`
-          id,
-          title,
-          sections,
-          created_at,
-          user_id,
-          profiles (
-            name,
-            avatar_url
-          )
-        `)
+        .select("id, title, sections, created_at, user_id")
         .eq("is_public", true)
         .order("created_at", { ascending: false });
-
-      console.log("Songs data:", songsData);
 
       if (songsError) {
         console.error("Error fetching songs:", songsError);
         setLoading(false);
         return;
       }
+
+      // Get all profiles
+      const { data: profilesData, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, name, avatar_url");
+
+      if (profilesError) {
+        console.error("Error fetching profiles:", profilesError);
+      }
+
+      // Create a map of user_id to profile
+      const profileMap: Record<string, Profile> = {};
+      (profilesData || []).forEach((profile) => {
+        profileMap[profile.id] = profile;
+      });
 
       // Get like counts for each song
       const { data: likeCounts, error: likeCountError } = await supabase
@@ -310,13 +314,18 @@ export default function Discover() {
         likeCountMap[like.song_id] = (likeCountMap[like.song_id] || 0) + 1;
       });
 
-      // Add like counts to songs
-      const songsWithLikes = (songsData || []).map((song) => ({
-        ...song,
-        like_count: likeCountMap[song.id] || 0,
-      }));
+      // Combine songs with profiles and like counts
+      const songsWithData: Song[] = (songsData || []).map((song) => {
+        const profile = profileMap[song.user_id];
+        return {
+          ...song,
+          like_count: likeCountMap[song.id] || 0,
+          author_name: profile?.name || "Anonymous",
+          author_avatar: profile?.avatar_url || null,
+        };
+      });
 
-      setSongs(songsWithLikes);
+      setSongs(songsWithData);
       setLoading(false);
     }
 
@@ -356,11 +365,10 @@ export default function Discover() {
   const filteredSongs = songs.filter((song) => {
     const searchLower = search.toLowerCase();
     const chords = getAllChords(song);
-    const authorName = song.profiles?.name || "Anonymous";
 
     return (
       song.title.toLowerCase().includes(searchLower) ||
-      authorName.toLowerCase().includes(searchLower) ||
+      song.author_name.toLowerCase().includes(searchLower) ||
       chords.some((chord) => chord.toLowerCase().includes(searchLower))
     );
   });
