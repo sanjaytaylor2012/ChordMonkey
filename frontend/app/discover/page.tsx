@@ -6,6 +6,8 @@ import ParticlesBackground from "@/components/ParticlesBackground";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/AuthProvider";
 import { useChordPlayback } from "@/components/chord-progression/useChordPlayback";
+import { SongSectionsPreview } from "@/components/SongSectionsPreview";
+import type { SongSection } from "@/components/chord-progression/types";
 
 interface Profile {
   id: string;
@@ -16,7 +18,7 @@ interface Profile {
 interface Song {
   id: string;
   title: string;
-  sections: { id: string; title: string; chords: string[] }[];
+  sections: SongSection[];
   created_at: string;
   user_id: string;
   like_count: number;
@@ -143,27 +145,6 @@ function SongCard({
     stopPlayback,
   } = useChordPlayback(sections);
 
-  function getChordsWithIndices(): {
-    chord: string;
-    sectionIndex: number;
-    chordIndex: number;
-  }[] {
-    if (!sections || !Array.isArray(sections)) return [];
-    const result: {
-      chord: string;
-      sectionIndex: number;
-      chordIndex: number;
-    }[] = [];
-    sections.forEach((section, sectionIndex) => {
-      (section.chords || []).forEach((chord, chordIndex) => {
-        result.push({ chord, sectionIndex, chordIndex });
-      });
-    });
-    return result;
-  }
-
-  const chordsWithIndices = getChordsWithIndices();
-
   function isChordPlaying(sectionIndex: number, chordIndex: number): boolean {
     return (
       isPlaying &&
@@ -229,32 +210,7 @@ function SongCard({
       </div>
 
       {/* Chords */}
-      {chordsWithIndices.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5 sm:gap-2">
-          {chordsWithIndices.slice(0, 8).map((item, index) => {
-            const playing = isChordPlaying(item.sectionIndex, item.chordIndex);
-            return (
-              <span
-                key={index}
-                className={`px-2 py-1 rounded-md text-sm font-medium transition-all duration-150 ${
-                  playing
-                    ? "bg-primary text-primary-foreground scale-110 shadow-lg"
-                    : "bg-primary/10 text-primary"
-                }`}
-              >
-                {item.chord}
-              </span>
-            );
-          })}
-          {chordsWithIndices.length > 8 && (
-            <span className="px-2 py-1 rounded-md bg-muted text-muted-foreground text-sm font-medium">
-              +{chordsWithIndices.length - 8} more
-            </span>
-          )}
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground italic">No chords yet</p>
-      )}
+      <SongSectionsPreview sections={sections} isChordPlaying={isChordPlaying} />
     </div>
   );
 }
