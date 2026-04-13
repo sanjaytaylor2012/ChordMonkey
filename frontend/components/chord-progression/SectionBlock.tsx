@@ -16,7 +16,14 @@ interface SectionBlockProps {
   openAddMenuSection: number | null;
   setOpenAddMenuSection: (sectionIndex: number | null) => void;
   onAddChord: (sectionIndex: number, chord: string) => void;
+  onMoveChord: (
+    sourceSectionIndex: number,
+    sourceChordIndex: number,
+    targetSectionIndex: number,
+    targetChordIndex: number,
+  ) => void;
   onRemoveChord: (sectionIndex: number, chordIndex: number) => void;
+  onSelectChord: (sectionIndex: number, chordIndex: number, chord: string) => void;
   onRenameSection: (sectionIndex: number, title: string) => void;
   onPlayChord: (chord: string) => void;
 }
@@ -31,11 +38,14 @@ export function SectionBlock({
   openAddMenuSection,
   setOpenAddMenuSection,
   onAddChord,
+  onMoveChord,
   onRemoveChord,
+  onSelectChord,
   onRenameSection,
   onPlayChord,
 }: SectionBlockProps) {
   const addMenuRef = useRef<HTMLDivElement | null>(null);
+  const dragChordIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (openAddMenuSection !== sectionIndex) {
@@ -68,6 +78,17 @@ export function SectionBlock({
     setOpenAddMenuSection(null);
   }
 
+  function handleDrop(targetChordIndex: number) {
+    const sourceChordIndex = dragChordIndexRef.current;
+    dragChordIndexRef.current = null;
+
+    if (sourceChordIndex === null || sourceChordIndex === targetChordIndex) {
+      return;
+    }
+
+    onMoveChord(sectionIndex, sourceChordIndex, sectionIndex, targetChordIndex);
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <SectionEditor
@@ -79,6 +100,24 @@ export function SectionBlock({
         {section.chords.map((chord, chordIndex) => (
           <div
             key={`${section.id}-${chordIndex}-${chord}`}
+            onClick={() => onSelectChord(sectionIndex, chordIndex, chord)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelectChord(sectionIndex, chordIndex, chord);
+              }
+            }}
+            draggable
+            onDragStart={() => {
+              dragChordIndexRef.current = chordIndex;
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+            }}
+            onDrop={() => handleDrop(chordIndex)}
+            onDragEnd={() => {
+              dragChordIndexRef.current = null;
+            }}
             className={`relative min-w-[70px] px-5 py-4 rounded-lg border-2 text-center transition-colors ${
               sectionIndex === playingSectionIndex && chordIndex === playingChordIndex
                 ? "border-blue-500 bg-blue-500/10"
@@ -86,12 +125,18 @@ export function SectionBlock({
                 ? "border-primary bg-primary/10"
                 : chordIndex === section.chords.length - 1
                 ? "border-green-600 bg-green-600/10"
-                : "border-border bg-background"
+                : "border-border bg-background hover:border-primary/60 hover:bg-muted"
             }`}
+            role="button"
+            tabIndex={0}
+            aria-label={`Select ${chord}`}
           >
             <button
               type="button"
-              onClick={() => onRemoveChord(sectionIndex, chordIndex)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onRemoveChord(sectionIndex, chordIndex);
+              }}
               className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-sm bg-red-600 text-xs font-bold leading-none text-white transition-colors hover:bg-red-700"
               aria-label={`Remove ${chord} from progression`}
               title="Remove chord"
@@ -102,7 +147,10 @@ export function SectionBlock({
             <div className="text-xs text-muted-foreground mt-1">{chordIndex + 1}</div>
             <button
               type="button"
-              onClick={() => onPlayChord(chord)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onPlayChord(chord);
+              }}
               disabled={!isPlayableChordSymbol(chord)}
               className="mt-3 rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               aria-label={`Play ${chord}`}

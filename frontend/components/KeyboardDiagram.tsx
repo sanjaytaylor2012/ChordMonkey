@@ -50,6 +50,8 @@ function chordToPitchClasses(chord: string): number[] {
 
   const normalizedSuffix = suffix.toLowerCase();
   let intervals = [0, 4, 7];
+  const hasDominantSeventh =
+    normalizedSuffix === "7" || normalizedSuffix.startsWith("7/");
 
   if (normalizedSuffix.startsWith("dim")) {
     intervals = [0, 3, 6];
@@ -57,6 +59,10 @@ function chordToPitchClasses(chord: string): number[] {
     intervals = [0, 4, 8];
   } else if (normalizedSuffix.startsWith("m")) {
     intervals = [0, 3, 7];
+  }
+
+  if (hasDominantSeventh) {
+    intervals = [...intervals, 10];
   }
 
   return intervals.map((interval) => (rootPc + interval) % 12);

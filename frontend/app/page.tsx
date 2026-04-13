@@ -233,6 +233,44 @@ function HomeContent() {
     setCurrentChordIndex(nextChordIndex);
   }
 
+  function handleMoveChord(
+    sourceSectionIndex: number,
+    sourceChordIndex: number,
+    targetSectionIndex: number,
+    targetChordIndex: number,
+  ) {
+    if (sourceSectionIndex !== targetSectionIndex) {
+      return;
+    }
+
+    const movedChord = sections[sourceSectionIndex]?.chords[sourceChordIndex];
+    if (!movedChord) {
+      return;
+    }
+
+    setSections((prev) =>
+      prev.map((section, index) => {
+        if (index !== sourceSectionIndex) {
+          return section;
+        }
+
+        const nextChords = [...section.chords];
+        const [removed] = nextChords.splice(sourceChordIndex, 1);
+        nextChords.splice(targetChordIndex, 0, removed);
+
+        return {
+          ...section,
+          chords: nextChords,
+        };
+      })
+    );
+
+    setSelectedChord(movedChord);
+    setCurrentSectionIndex(sourceSectionIndex);
+    setCurrentChordIndex(targetChordIndex);
+    setLastAddedChord(null);
+  }
+
   function handleRemoveChord(sectionIndex: number, chordIndexToRemove: number) {
     setSections((prev) =>
       prev.map((section, index) =>
@@ -387,6 +425,7 @@ function HomeContent() {
               onClear={handleClear}
               onSelectChord={handleSelectProgressionChord}
               onAddChord={handleAddChordToSection}
+              onMoveChord={handleMoveChord}
               onRemoveChord={handleRemoveChord}
               onAddSection={handleAddSection}
               onRenameSection={handleRenameSection}

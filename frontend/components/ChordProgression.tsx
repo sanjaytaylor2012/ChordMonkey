@@ -24,6 +24,12 @@ interface ChordProgressionProps {
     chord: string,
   ) => void;
   onAddChord: (sectionIndex: number, chord: string) => void;
+  onMoveChord: (
+    sourceSectionIndex: number,
+    sourceChordIndex: number,
+    targetSectionIndex: number,
+    targetChordIndex: number,
+  ) => void;
   onRemoveChord: (sectionIndex: number, chordIndex: number) => void;
   onAddSection: () => void;
   onRenameSection: (sectionIndex: number, title: string) => void;
@@ -109,6 +115,7 @@ export default function ChordProgression({
   onClear,
   onSelectChord,
   onAddChord,
+  onMoveChord,
   onRemoveChord,
   onAddSection,
   onRenameSection,
@@ -389,7 +396,9 @@ export default function ChordProgression({
               openAddMenuSection={openAddMenuSection}
               setOpenAddMenuSection={setOpenAddMenuSection}
               onAddChord={onAddChord}
+              onMoveChord={onMoveChord}
               onRemoveChord={onRemoveChord}
+              onSelectChord={onSelectChord}
               onRenameSection={onRenameSection}
               onPlayChord={playChordPreview}
             />
