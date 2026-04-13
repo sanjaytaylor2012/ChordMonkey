@@ -13,6 +13,7 @@ interface ApiRec {
   reason: string;
   roman: string;
   function: string;
+  highlight?: string;
 }
 
 interface ApiResp {
@@ -118,6 +119,8 @@ function chordToPitchClasses(chordText: string): number[] {
 
   const normalizedSuffix = suffix.toLowerCase();
   let intervals = [0, 4, 7];
+  const hasDominantSeventh =
+    normalizedSuffix === "7" || normalizedSuffix.startsWith("7/");
 
   if (normalizedSuffix.startsWith("dim")) {
     intervals = [0, 3, 6];
@@ -125,6 +128,10 @@ function chordToPitchClasses(chordText: string): number[] {
     intervals = [0, 4, 8];
   } else if (normalizedSuffix.startsWith("m")) {
     intervals = [0, 3, 7];
+  }
+
+  if (hasDominantSeventh) {
+    intervals = [...intervals, 10];
   }
 
   return intervals.map((interval) => (rootPc + interval) % 12);
@@ -145,36 +152,6 @@ function keyToScale(keyText: string): string[] | null {
   const noteNames = useFlats ? FLAT_NOTES : SHARP_NOTES;
 
   return intervals.map((interval) => noteNames[(tonicPc + interval) % 12]);
-}
-
-function romanToChordSymbol(
-  romanFigure: string,
-  keyText: string,
-): string | null {
-  const scale = keyToScale(keyText);
-  if (!scale) return null;
-
-  const degreeMap: Record<string, number> = {
-    i: 0,
-    ii: 1,
-    iii: 2,
-    iv: 3,
-    v: 4,
-    vi: 5,
-    vii: 6,
-  };
-  const core = romanFigure.replace(/[\u00B0o]/g, "").replace(/[0-9]/g, "");
-  const degree = degreeMap[core.toLowerCase()];
-  if (degree === undefined) return null;
-
-  const root = scale[degree];
-  const isDiminished =
-    romanFigure.includes("\u00B0") || romanFigure.includes("o");
-  const isMinor = core === core.toLowerCase();
-
-  if (isDiminished) return `${root}dim`;
-  if (isMinor) return `${root}m`;
-  return root;
 }
 
 export default function ChordRecommendations({
@@ -259,18 +236,7 @@ export default function ChordRecommendations({
       .map((note) => NOTE_TO_PC[note])
       .filter((pc): pc is number => pc !== undefined),
   );
-  const recommendations = (data?.recommendations ?? []).map((rec) => {
-    if (selectedKey === AUTO_KEY) return rec;
-
-    const transformed = romanToChordSymbol(rec.roman, selectedKey);
-    if (!transformed) return rec;
-
-    return {
-      ...rec,
-      chord: transformed,
-      reason: `Diatonic choice in ${selectedKey}`,
-    };
-  });
+  const recommendations = data?.recommendations ?? [];
 
   return (
     <div className="flex flex-col">
@@ -332,18 +298,25 @@ export default function ChordRecommendations({
               level === "advanced" &&
               activeScalePitchClasses.size > 0 &&
               chordPitchClasses.some((pc) => !activeScalePitchClasses.has(pc));
+            const isResolutionHighlight = rec.highlight === "resolution";
 
             return (
               <div
                 key={rec.chord}
                 onClick={() => onSelectChord(rec.chord)}
                 className={`flex cursor-pointer items-center justify-between rounded-lg border p-4 transition-colors ${
-                  isNonDiatonic
+                  isResolutionHighlight
+                    ? "border-blue-500 bg-blue-500/10"
+                    : isNonDiatonic
                     ? "border-yellow-400 bg-yellow-500/5"
                     : "border-border bg-background"
                 } ${isSelected ? "bg-primary/10" : "hover:bg-muted"}`}
                 title={
-                  isNonDiatonic ? "Non-diatonic recommendation" : undefined
+                  isResolutionHighlight
+                    ? "Resolution of the previous dominant 7th"
+                    : isNonDiatonic
+                    ? "Non-diatonic recommendation"
+                    : undefined
                 }
               >
                 <div>

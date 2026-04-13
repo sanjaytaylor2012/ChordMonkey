@@ -92,6 +92,22 @@ def _function_from_roman(figure: str) -> str:
     return "Other"
 
 
+def _is_secondary_dominant_figure(figure: str) -> bool:
+    normalized = figure.replace("o", "Â°")
+    return normalized.startswith("V/") and "/" in normalized
+
+
+def _secondary_dominant_target_figure(figure: str) -> Optional[str]:
+    if not _is_secondary_dominant_figure(figure):
+        return None
+    return figure.split("/", 1)[1]
+
+
+def _is_secondary_dominant_figure(figure: str) -> bool:
+    normalized = figure.strip()
+    return normalized.startswith("V/") and "/" in normalized
+
+
 def _weighted_shuffle(items: List[tuple[str, str, float]]) -> List[tuple[str, str, float]]:
     return sorted(
         items,
@@ -313,6 +329,8 @@ _CANDIDATE_KEYS: List[m21key.Key] = [
 
 def _quality_bucket(cs: harmony.ChordSymbol) -> str:
     kind = (cs.chordKind or "").lower()
+    if "dominant" in kind:
+        return "dom7"
     if "diminished" in kind:
         return "dim"
     if "minor" in kind:
@@ -360,6 +378,113 @@ def _allowed_diatonic_triads(k: m21key.Key) -> set[tuple[int, str]]:
         )
 
     return triads
+
+
+def _diatonic_target_figures(k: m21key.Key) -> List[str]:
+    if k.mode == "minor":
+        return ["i", "iiÂ°", "III", "iv", "V", "VI", "VII"]
+    return ["I", "ii", "iii", "IV", "V", "vi", "viiÂ°"]
+
+
+def _roman_figure_to_symbol(
+    figure: str,
+    k: m21key.Key,
+    *,
+    use_secondary_dominant_7ths: bool = False,
+) -> Optional[str]:
+    try:
+        rn_obj = roman.RomanNumeral(figure, k)
+    except Exception:
+        return None
+
+    root = rn_obj.root()
+    if root is None:
+        return None
+
+    if use_secondary_dominant_7ths and _is_secondary_dominant_figure(figure):
+        return f"{_display_note_name(root.name)}7"
+
+    return _symbol_from_chord_obj(chord.Chord(rn_obj.pitches))
+
+
+def _secondary_dominant_resolution(last_sym: str, k: m21key.Key) -> Optional[tuple[str, str]]:
+    last_cs = _safe_chordsymbol(last_sym)
+    if not last_cs:
+        return None
+
+    kind = (last_cs.chordKind or "").lower()
+    if "dominant" not in kind:
+        return None
+
+    root = last_cs.root()
+    if root is None:
+        return None
+
+    target_pitch_class = (root.pitchClass + 5) % 12
+
+    for figure in _diatonic_target_figures(k):
+        try:
+            rn_obj = roman.RomanNumeral(figure, k)
+        except Exception:
+            continue
+
+        target_root = rn_obj.root()
+        if target_root is None or target_root.pitchClass != target_pitch_class:
+            continue
+
+        if figure.lower().startswith("i"):
+            return None
+
+        symbol = _roman_figure_to_symbol(figure, k)
+        if not symbol:
+            return None
+
+        return (figure, symbol)
+
+    return None
+
+
+def _diatonic_target_figures(k: m21key.Key) -> List[str]:
+    if k.mode == "minor":
+        return ["i", "iio", "III", "iv", "V", "VI", "VII"]
+    return ["I", "ii", "iii", "IV", "V", "vi", "viio"]
+
+
+def _secondary_dominant_resolution(last_sym: str, k: m21key.Key) -> Optional[tuple[str, str]]:
+    last_cs = _safe_chordsymbol(last_sym)
+    if not last_cs:
+        return None
+
+    kind = (last_cs.chordKind or "").lower()
+    if "dominant" not in kind:
+        return None
+
+    root = last_cs.root()
+    if root is None:
+        return None
+
+    target_pitch_class = (root.pitchClass + 5) % 12
+
+    for figure in _diatonic_target_figures(k):
+        try:
+            rn_obj = roman.RomanNumeral(figure, k)
+        except Exception:
+            continue
+
+        target_root = rn_obj.root()
+        if target_root is None or target_root.pitchClass != target_pitch_class:
+            continue
+
+        if figure.lower() == "i":
+            return None
+
+        symbol = _roman_figure_to_symbol(figure, k)
+        if not symbol:
+            return None
+
+        return (figure, symbol)
+
+    return None
 
 
 def _infer_key_scores(symbols: List[str]) -> List[Tuple[m21key.Key, float]]:
@@ -493,23 +618,47 @@ def recommend_next_chords(
     )
     recommendation_limit = max(1, min(max_recs, recommendation_cap))
 
-    def add_rec(figure: str, reason: str) -> Optional[Dict[str, str]]:
-        try:
-            rn_obj = roman.RomanNumeral(figure, k)
-            symbol = _symbol_from_chord_obj(chord.Chord(rn_obj.pitches))
-            return {
-                "chord": symbol,
-                "roman": figure,
-                "function": _function_from_roman(figure),
-                "reason": reason,
-            }
-        except Exception:
+    def add_rec(
+        figure: str,
+        reason: str,
+        *,
+        highlight: Optional[str] = None,
+    ) -> Optional[Dict[str, str]]:
+        symbol = _roman_figure_to_symbol(
+            figure,
+            k,
+            use_secondary_dominant_7ths=recommendation_level == _ADVANCED,
+        )
+        if not symbol:
             return None
+
+        rec: Dict[str, str] = {
+            "chord": symbol,
+            "roman": figure,
+            "function": _function_from_roman(figure),
+            "reason": reason,
+        }
+        if highlight:
+            rec["highlight"] = highlight
+        return rec
 
     if recommendation_level == _ADVANCED:
         recommendation_pool = _build_recommendation_pool(k, last_function)
     else:
         recommendation_pool = _beginner_recommendation_pool(k, last_function)
+
+    if recommendation_level == _ADVANCED and last_sym:
+        resolution = _secondary_dominant_resolution(last_sym, k)
+        if resolution:
+            resolution_figure, resolution_symbol = resolution
+            forced_resolution = add_rec(
+                resolution_figure,
+                f"{resolution_symbol} resolves the previous dominant 7th chord.",
+                highlight="resolution",
+            )
+            if forced_resolution and forced_resolution["chord"] not in seen_chords:
+                seen_chords.add(forced_resolution["chord"])
+                recs.append(forced_resolution)
 
     for figure, reason, _weight in _weighted_shuffle(recommendation_pool):
         rec = add_rec(figure, reason)
